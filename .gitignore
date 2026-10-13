@@ -1,0 +1,22 @@
+# deps & builds
+node_modules/
+frontend/dist/
+backend/bin/
+*.test
+*.exe
+
+# coverage (summary lives in docs/COVERAGE.md)
+coverage/
+frontend/coverage/
+
+# env & local tooling
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
