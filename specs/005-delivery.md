@@ -16,10 +16,11 @@
 |---|---|
 | D-01 | `make docker-build && make docker-run` serves the UI at `http://localhost:8080` and the API under `/api/v1`. |
 | D-02 | Container runs as non-root and reports `healthy` in `docker ps`. |
-| D-03 | `scripts/smoke.sh [base_url]` (curl + `set -euo pipefail`) checks: healthz, one success per operation family, `DIVISION_BY_ZERO`, `UNKNOWN_OPERATION`, `INVALID_JSON`. Exit ≠ 0 on any mismatch. CI runs it against the built image. |
+| D-03 | `scripts/smoke.sh [base_url]` (curl + `set -euo pipefail`) checks: healthz, one success for **each of the 7 operations**, `DIVISION_BY_ZERO`, `UNKNOWN_OPERATION`, `INVALID_JSON`. Exit ≠ 0 on any mismatch. CI runs it against the built image. |
 | D-04 | README complete: overview, quick start (Docker), local dev (Go ≥ 1.24, Node ≥ 22), tests & coverage, API + curl examples, error codes, operation semantics, design decisions (summary + link to ADRs), assumptions, AI usage (link to `prompts/`), "what I'd do next". |
 | D-05 | `prompts/PROMPTS.md` curated: kickoff prompt + the prompt used for each spec + notable corrections; links `session-log.md`. |
 
 ## Docs
 
-README (all sections above).
+README (all sections above). The quick start shows `make docker-run` (foreground) and `make smoke` as two steps
+in **separate terminals** (or `docker run -d` equivalent), since `docker-run` blocks.

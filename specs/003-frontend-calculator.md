@@ -4,6 +4,9 @@
 
 ## Setup (step 1 of this spec)
 
+`frontend/` intentionally contains only `.gitkeep` before this step. `create-vite` prompts on a non-empty folder, so
+first run `git rm frontend/.gitkeep`. If any command still needs interactive input, **stop and ask the human to run it**.
+
 ```bash
 npm create vite@latest frontend -- --template react-ts
 cd frontend && npm install
@@ -17,15 +20,18 @@ npm install -D vitest @vitest/coverage-v8 jsdom @testing-library/react @testing-
   thresholds per spec 004, exclude `src/main.tsx`, `src/test/**`, `**/*.d.ts`.
 - ESLint: Vite's flat config + `jsx-a11y` recommended. Prettier defaults + `singleQuote: true`.
 - `package.json` scripts: `dev`, `build`, `preview`, `test` (`vitest`), `coverage` (`vitest run --coverage`),
-  `lint` (`eslint .`), `typecheck` (`tsc -b --noEmit`), `format` (`prettier --write .`).
+  `lint` (`eslint . --max-warnings=0`), `typecheck` (`tsc -b --noEmit`; if the generated tsconfig does not support it, report and propose the closest equivalent), `format` (`prettier --write .`).
 - Delete Vite demo assets/styles.
+- **Verify at the start of this spec and report**: that `AbortSignal.any` / `AbortSignal.timeout` and MSW's fetch
+  interception work under jsdom. If jsdom's `AbortController`/`AbortSignal` break MSW (fetch rejects the signal),
+  `src/test/setup.ts` restores Node's `AbortController` and `AbortSignal` on `globalThis`. No new dependency.
 
 ## Structure (fixed)
 
 ```
 src/
   api/types.ts            OperationName, CalculateResponse, ProblemDetails, ApiError (discriminated by code)
-  api/client.ts           calculate(op, operands, { signal }) > Promise<Result<CalculateResponse, ApiError>>
+  api/client.ts           calculate(op, operands, { signal, timeoutMs }) > Promise<Result<CalculateResponse, ApiError>>
   features/calculator/
     model/types.ts        State, Action, BinaryOp, UnaryOp
     model/reducer.ts      pure state machine (no I/O, no Date/Math.random)
@@ -40,7 +46,8 @@ src/
 ## API client rules
 
 - Base URL `import.meta.env.VITE_API_BASE_URL ?? ""` (same-origin by default).
-- Timeout 5 s via `AbortSignal.any([callerSignal, AbortSignal.timeout(5000)])`.
+- Timeout via `AbortSignal.any([callerSignal, AbortSignal.timeout(timeoutMs)])`; both `signal` and `timeoutMs`
+  are optional, `timeoutMs` defaults to `5000`. Tests inject a short `timeoutMs` (no real 5 s waiting).
 - Returns a `Result` — **never throws** for HTTP/network/timeout errors:
   - 2xx > validate body shape with a type guard (no `as`); invalid shape > `INVALID_RESPONSE`.
   - non-2xx with `application/problem+json` > `ApiError` with backend `code` + `status`.
@@ -80,10 +87,15 @@ Rules (immediate execution, no precedence):
 ## Keypad & accessibility
 
 - Keys: `C`, `⌫`, `±`, `÷`, `7 8 9 ×`, `4 5 6 −`, `1 2 3 +`, `0 . =`, plus `xʸ`, `√`, `%` (percent of).
-- Every key is a `<button type="button">` with an `aria-label` for symbols ("divide", "square root", "percent of", "power").
-- Display is `role="status"` + `aria-live="polite"`. Visible `:focus-visible` ring. Disabled look while evaluating.
+- Every key is a `<button type="button">` with an accessible name (`aria-label` for symbols):
+  `÷` divide · `×` multiply · `−` subtract · `+` add · `xʸ` power · `√` square root · `%` percent of ·
+  `±` toggle sign · `⌫` backspace · `C` clear · `.` decimal point · `=` equals · digits use their own number (`0`–`9`).
+- Display is `role="status"` + `aria-live="polite"`. Visible `:focus-visible` ring.
+- While `evaluating`, keys are `aria-disabled="true"` with a disabled look and the reducer ignores their actions;
+  **no native `disabled` attribute** (focus is kept). `C` is always enabled.
 - Keyboard: `0–9`, `.`/`,`, `+ - * /`, `^`, `%`, `r` (√), `Enter`/`=`, `Backspace`, `Escape`/`Delete` (clear).
-  Listener on `window`, removed on unmount; ignored when modifier keys are held.
+  Listener on `window`, removed on unmount; ignored when modifier keys are held. The handler calls
+  `preventDefault()` for every key the keymap handles (so `Enter` on a focused button does not also click it).
 
 ## Responsive
 
@@ -102,10 +114,11 @@ Rules (immediate execution, no precedence):
 | FE-06 | Integration: chaining `2 + 3 × 4 =` issues two requests in order and shows the final result. |
 | FE-07 | Integration: `÷ 0 =` with MSW 422 `DIVISION_BY_ZERO` shows the mapped message in an `alert`; next digit recovers. |
 | FE-08 | Integration: the same flows work with the keyboard only. |
-| FE-09 | Integration: keys are disabled/ignored while a request is pending; `C` during a pending request aborts it and a late response doesn't change the display. |
-| FE-10 | Integration: network error and timeout show their messages (timeout test uses fake timers or a short injected timeout). |
-| FE-11 | All keys reachable by accessible name (`getByRole('button', { name: /divide/i })`). |
-| FE-12 | `npm run lint`, `npm run typecheck`, `npm run build` pass with zero warnings. |
+| FE-09 | Integration: while a request is pending, keys have `aria-disabled="true"` (no native `disabled`) and their presses/keystrokes are ignored; `C` stays enabled, aborts the request, and a late response doesn't change the display. |
+| FE-10 | Integration: network error and timeout show their messages (timeout test injects a short `timeoutMs`; no real 5 s wait). |
+| FE-11 | All keys reachable by the accessible names listed above (`getByRole('button', { name: /divide/i })`, etc.). |
+| FE-12 | `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build` pass with zero warnings. |
+| FE-13 | Keyboard: pressing a handled key calls `preventDefault()` (e.g. `Enter` with a digit key focused triggers only `EQUALS`, not also that key's click). |
 
 ## Out of scope
 
