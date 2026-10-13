@@ -27,6 +27,9 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
     testable with a fake, the domain is testable without HTTP.
 - **Alternatives**: one handler per operation with duplicated decoding (repetitive); a switch statement (OCP violation).
 - **Consequences**: the HTTP layer knows each operation's arity (to validate `a`/`b`) via `Operations()`.
+- **Amendment 2026-10-13 — ordered operations**: the registry stays a `map[Op]operation` for lookup; declaration order
+  comes from a separate ordered `[]Info` built in `New`. `Operations()` returns a copy of that slice, so callers cannot
+  mutate the registry (spec 001, CALC-10).
 
 ## ADR-004 — API shape: one endpoint per operation
 
@@ -41,6 +44,9 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
     error instead of a 404, and the spec literally asks to "expose endpoints for calculator operations".
   - `GET /add?a=1&b=2` — rejected: string→float parsing per param, weaker validation story.
 - **Consequences**: unknown operation → `404 UNKNOWN_OPERATION`; routing is trivial; easy curl examples.
+- **Amendment 2026-10-13 — routing rules**: `POST /api/v1/<unknown>` → `404 UNKNOWN_OPERATION`; any other unmatched
+  `/api/` route → `404 NOT_FOUND`; `POST /api/v1/operations` → `405` with `Allow: GET`. The router emits every error body
+  itself as `application/problem+json` (no `ServeMux` `text/plain` defaults) (spec 002, API-04).
 
 ## ADR-005 — Error model: RFC 9457 Problem Details + stable codes
 
@@ -51,6 +57,11 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
   (domain errors) · `500` unexpected.
 - **Alternatives**: ad-hoc `{"error": "..."}` (no standard, clients parse strings).
 - **Consequences**: the frontend maps errors by `code` only — never by `detail` text. User-facing copy lives in the frontend.
+- **Amendment 2026-10-13 — precedence and defensive mapping**: request errors resolve in this order: 404/405 → 415 →
+  413 / 400 `INVALID_JSON` → unknown fields → operand type or missing → `UNEXPECTED_OPERAND` (`{"a":1,"b":null}` on a unary
+  operation is `UNEXPECTED_OPERAND`). Matching `DisallowUnknownFields` errors by message text is allowed only inside one
+  isolated, tested function. Sentinels outside the table map defensively: `ErrInvalidOperand` → 400 `INVALID_OPERAND`,
+  `ErrUnknownOperation` → 404 `UNKNOWN_OPERATION`, `ErrArity` → 500 `INTERNAL_ERROR` with no internals in `detail`.
 
 ## ADR-006 — Numbers are IEEE-754 float64 end to end
 
@@ -73,6 +84,11 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
 | `sqrt` | 1 | √a | a < 0 (no complex numbers) |
 | `percentage` | 2 | "a percent of b" = a × b ÷ 100 | overflow |
 
+- **Amendment 2026-10-13 — percentage evaluation**: computed literally as `a*b/100`. An intermediate overflow returns
+  `ErrOverflow` even when the true result is representable (e.g. `percentage(1e308, 10)`). Documented in the README.
+- **Amendment 2026-10-13 — validation order in `Calculate`**: unknown operation → arity → finite operands → compute →
+  result check. `0^negative` is detected as `ErrDivisionByZero` before an `Inf` result can become `ErrOverflow`.
+
 ## ADR-008 — Frontend stack
 
 - **Decision**: Vite + React + TypeScript (`strict`, `noUncheckedIndexedAccess`). No router, no state library,
@@ -80,6 +96,9 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
 - **Alternatives**: Redux/Zustand (one screen, one reducer — unjustified), React Query (one mutation,
   needs abort + stale-response control we want to show explicitly), Tailwind/MUI (dependency weight).
 - **Consequences**: runtime deps are only `react` + `react-dom`.
+- **Amendment 2026-10-13 — client timeout and test environment**: `calculate(op, operands, { signal, timeoutMs })`, with
+  `timeoutMs` optional (default 5000) so tests inject a short timeout instead of waiting. If jsdom's `AbortController` /
+  `AbortSignal` break MSW, `src/test/setup.ts` restores Node's. Lint runs `eslint . --max-warnings=0`.
 
 ## ADR-009 — Validation split: format on the client, rules on the server
 
@@ -96,6 +115,9 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
   contract; scope creep. Two-input form — rejected: less intuitive, doesn't feel like a calculator.
 - **Consequences**: state machine in a pure reducer; effects described as data (`status: "evaluating"` +
   request), executed by the hook; stale responses ignored via request id; `C` aborts in-flight requests.
+- **Amendment 2026-10-13 — keyboard and busy state**: the window keydown handler calls `preventDefault()` for every key the
+  keymap handles. While `evaluating`, keys use `aria-disabled` and the reducer ignores their actions (no native `disabled`,
+  focus is kept); `C` is always enabled. Accessible names are fixed in spec 003.
 
 ## ADR-011 — Deployment: one binary serves API + SPA
 
@@ -104,6 +126,9 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
   Image: multi-stage (node build → go build `CGO_ENABLED=0` → `distroless/static:nonroot`).
 - **Alternatives**: nginx + API via docker-compose (two containers, CORS or reverse-proxy config to explain).
 - **Consequences**: one port, one process, tiny image. Healthcheck via `server -healthcheck` (distroless has no curl).
+- **Amendment 2026-10-13 — static serving details**: `/healthz` and `/api/` take precedence over files and the SPA fallback;
+  non-GET/HEAD to a non-API path → 405 problem+json with `Allow: GET, HEAD`. `X-Request-ID` is on every response;
+  `Cache-Control: no-store` only on `/api/` responses.
 
 ## ADR-012 — Testing strategy and gates
 
@@ -113,6 +138,10 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
   component integration tests driven by `user-event` (click + keyboard).
 - **No E2E framework** (scope). Replaced by `scripts/smoke.sh` (curl) against the container.
 - **Gates**: backend `internal/...` ≥ 90 % statements; frontend ≥ 85 % lines/statements/functions, ≥ 80 % branches.
+- **Amendment 2026-10-13 — sleeps and evidence types**: tests may not use fixed sleeps or depend on execution order;
+  event-driven polling with a timeout (server readiness, `waitFor` / `findBy*`) is allowed. Every AC carries an evidence
+  type (test, command or review) shown in the final report. `cmd/server` is tested but not counted in the backend gate;
+  `docs/COVERAGE.md` reports it separately.
 
 ## ADR-013 — Minimal production hygiene
 
