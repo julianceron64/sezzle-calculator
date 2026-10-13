@@ -79,3 +79,14 @@ scripts/                     coverage gate, smoke test
 - `make check` passes; coverage gates from `specs/004` are met.
 - README sections listed in the spec's **Docs** section are updated.
 - Final report: AC > test table (✅/❌), coverage numbers, deviations (expected: none), open questions.
+
+## Skills policy
+
+- Specs, ADRs and this file outrank any skill. If a skill's workflow conflicts with them, follow the specs and tell me.
+- Do NOT run brainstorming or design-exploration workflows and do not propose alternative architectures. Design is decided in `docs/DECISIONS.md`.
+- Encouraged: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `requesting-code-review`.
+- Plans are delivered inline in the chat using the `/implement-spec` format. Do not write plan files into the repo.
+- Do not create git worktrees or branches, and never push. I manage branches.
+- Simplicity (ponytail, level `lite`): prefer the standard library and the smallest change that satisfies the ACs,
+  but never by removing a structure mandated by an ADR or spec (operation registry, pure reducer, effects-as-data,
+  problem+json, consumer-defined interfaces).
