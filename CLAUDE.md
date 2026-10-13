@@ -75,10 +75,12 @@ scripts/                     coverage gate, smoke test
 
 ## Definition of done (every spec)
 
-- Every AC in the spec is covered by at least one test that would fail if the behavior broke.
+- Every AC has one primary **evidence type** (see `specs/004`): `test` (an automated test that fails if the behavior
+  breaks — the default), `command` (a command whose result is checked) or `review` (checked by `/review` or the human).
 - `make check` passes; coverage gates from `specs/004` are met.
 - README sections listed in the spec's **Docs** section are updated.
-- Final report: AC > test table (✅/❌), coverage numbers, deviations (expected: none), open questions.
+- When a spec is closed, commit `prompts/session-log.md` as `chore(prompts): ...`.
+- Final report: AC > evidence-type > evidence table (✅/❌), coverage numbers, deviations (expected: none), open questions.
 
 ## Skills policy
 
