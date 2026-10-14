@@ -754,3 +754,97 @@ prompts/session-log.md as chore(prompts). No push. Give me the commit list and s
 ~~~~text
 go
 ~~~~
+
+### 2026-10-14T03:18:34Z
+
+~~~~text
+
+
+<pasted_content id="11a6">
+Improve the README start of the document. Do not change anything else yet.
+
+1. Add a short "Get the code" step right before "Quick start (Docker)":
+   - `git clone https://github.com/julianceron64/sezzle-calculator.git`
+   - `cd sezzle-calculator`
+   - one line saying which section to follow next (Docker quick start if they only want to run it,
+     Local development if they want to work on it).
+   Use the real remote URL from `git remote get-url origin`, not a guess. If the URL shown is
+   not HTTPS, convert it to the HTTPS form.
+
+2. Replace the one-line prerequisites of the Docker quick start with a short list: Docker with the
+   daemon running (Docker Desktop on Windows/macOS), make, and bash + curl (for `make smoke`; Git
+   Bash on Windows provides them). State the versions this was tested with, taken from
+   `docker --version`, `make --version`, `bash --version` and `curl --version` on this machine
+   (do not guess).
+
+3. Add a "Without make" fallback: the exact `docker build` and `docker run` commands that
+   `make docker-build` and `make docker-run` execute (read the Makefile and use the same image
+   name, tag and flags), plus how to run the smoke test directly (`bash scripts/smoke.sh`) and how
+   to stop the container.
+
+4. In "Local development", add the missing first steps after cloning: `cd frontend && npm ci`,
+   and which terminals run `make dev-backend` and `make dev-frontend`, and the URL to open.
+
+5. Replace the emoji arrow in the architecture diagram with a plain `->` or `▶`.
+
+6. Verify every command you wrote: run the no-make Docker commands (use port 18080 if 8080 is
+   busy and say so in the commit message) and confirm the clone URL and paths are correct.
+
+Commit as `docs(readme): add clone steps, Docker prerequisites and a no-make path`, then commit
+prompts/session-log.md as chore(prompts). No push. Give me the commit list and stop.
+</pasted_content id="11a6">
+~~~~
+
+### 2026-10-14T03:19:10Z
+
+~~~~text
+go
+~~~~
+
+### 2026-10-14T03:24:21Z
+
+~~~~text
+<task-notification>
+<task-id>b0dp53h3v</task-id>
+<tool-use-id>toolu_015CnN1xfLs5cESBjjJG8bcd</tool-use-id>
+<output-file>C:\Users\USUARIO\AppData\Local\Temp\claude\C--Users-USUARIO-Desktop-uni-sezzle-calculator\4919a24f-1386-4cf7-8404-8c36e276fbe5\tasks\b0dp53h3v.output</output-file>
+<status>failed</status>
+<summary>Background command "cd /c/Users/USUARIO/AppData/Local/Temp/claude/C--Users-USUARIO-Desktop-uni-sezzle-calculator/30743161-beac-4fb4-a79d-60172e0e1482/scratchpad/cleanclone3 &amp;&amp; docker run --rm -p 18080:8080 --name sezzle-calculator sezzle-calculator:local" failed with exit code 125</summary>
+</task-notification>
+~~~~
+
+### 2026-10-14T03:26:10Z
+
+~~~~text
+<task-notification>
+<task-id>byai95ulx</task-id>
+<tool-use-id>toolu_016yt8pbycjDtKT4rjzLz4JB</tool-use-id>
+<output-file>C:\Users\USUARIO\AppData\Local\Temp\claude\C--Users-USUARIO-Desktop-uni-sezzle-calculator\4919a24f-1386-4cf7-8404-8c36e276fbe5\tasks\byai95ulx.output</output-file>
+<status>completed</status>
+<summary>Background command "cd /c/Users/USUARIO/AppData/Local/Temp/claude/C--Users-USUARIO-Desktop-uni-sezzle-calculator/30743161-beac-4fb4-a79d-60172e0e1482/scratchpad/cleanclone3 &amp;&amp; docker run --rm -p 8080:8080 --name sezzle-calculator sezzle-calculator:local" completed (exit code 0)</summary>
+</task-notification>
+~~~~
+
+### 2026-10-14T03:26:36Z
+
+~~~~text
+<task-notification>
+<task-id>bvcqyg82i</task-id>
+<tool-use-id>toolu_01Av1igNsu4LMnze15JVcYqa</tool-use-id>
+<output-file>C:\Users\USUARIO\AppData\Local\Temp\claude\C--Users-USUARIO-Desktop-uni-sezzle-calculator\4919a24f-1386-4cf7-8404-8c36e276fbe5\tasks\bvcqyg82i.output</output-file>
+<status>failed</status>
+<summary>Background command "make dev-backend" failed with exit code 2</summary>
+</task-notification>
+~~~~
+
+### 2026-10-14T03:26:36Z
+
+~~~~text
+<task-notification>
+<task-id>b6rctfund</task-id>
+<tool-use-id>toolu_01QNG1e96oEEKKW5K1Jizy5c</tool-use-id>
+<output-file>C:\Users\USUARIO\AppData\Local\Temp\claude\C--Users-USUARIO-Desktop-uni-sezzle-calculator\4919a24f-1386-4cf7-8404-8c36e276fbe5\tasks\b6rctfund.output</output-file>
+<status>failed</status>
+<summary>Background command "make dev-frontend" failed with exit code 2</summary>
+</task-notification>
+~~~~
