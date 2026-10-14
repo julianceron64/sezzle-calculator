@@ -1,24 +1,74 @@
 .key {
   min-height: 56px; /* touch target: at least 48px */
   padding: 0;
+  border: 1px solid var(--key-border);
+  border-radius: var(--radius-key);
   font: inherit;
   font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 120ms ease-out,
+    filter 120ms ease-out;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .wide {
   grid-column: span 2;
 }
 
+.digit {
+  background: var(--key-digit-bg);
+  color: var(--key-digit-ink);
+}
+
+.function {
+  background: var(--key-fn-bg);
+  color: var(--key-fn-ink);
+}
+
+.operator {
+  background: var(--key-op-bg);
+  border-color: transparent;
+  color: var(--key-op-ink);
+  font-size: 1.4rem;
+}
+
+.equals {
+  background: var(--key-eq-bg);
+  border-color: transparent;
+  color: var(--key-eq-ink);
+  font-size: 1.4rem;
+}
+
+.key:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .key:hover:not([aria-disabled='true']) {
+    filter: brightness(0.95);
+  }
+}
+
+.key:active:not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+/* Busy: dimmed and not interactive-looking, but still focusable (no `disabled`). */
 .key[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.digit,
-.operator,
-.function,
-.equals {
-  /* variant hooks, styled in the theme layer */
-  font-weight: inherit;
+@media (prefers-reduced-motion: reduce) {
+  .key {
+    transition: none;
+  }
+
+  .key:active:not([aria-disabled='true']) {
+    transform: none;
+  }
 }

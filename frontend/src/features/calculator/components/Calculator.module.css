@@ -1,9 +1,12 @@
 .card {
-  box-sizing: border-box;
   width: 100%;
   max-width: 360px;
   margin: 0 auto;
   padding: 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .title {
