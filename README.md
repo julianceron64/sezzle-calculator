@@ -55,7 +55,7 @@ Prerequisites: Go ≥ 1.24, Node ≥ 22, make.
 cd frontend && npm ci   # once
 make dev-backend        # API on :8080
 make dev-frontend       # UI on :5173 (proxies /api → :8080)
-make check              # lint + typecheck + tests + coverage gates
+make check              # lint + typecheck + coverage gates (see "Testing & coverage" for what it leaves out)
 ```
 
 ## API
@@ -225,11 +225,15 @@ layouts). Handled keys call `preventDefault()`, so `Enter` on a focused button d
 make test        # go test -race -count=1 ./...  +  vitest run
 make coverage    # backend + frontend coverage reports, with the gates below
 make lint        # gofmt, go vet, eslint (--max-warnings=0), tsc --noEmit, no-fixed-sleeps check
-make check       # lint + coverage: the full quality gate, and what CI runs
+make check       # lint + coverage: the local quality gate (not the same set of steps as CI, see below)
 ```
 
 `make check` needs `cd frontend && npm ci` once. Reports: `coverage/backend.html` and `frontend/coverage/index.html`
 (plus `lcov.info`); the latest numbers are in [`docs/COVERAGE.md`](docs/COVERAGE.md).
+
+`make check` does **not** run the `cmd/server` tests (the backend coverage run covers `./internal/...` only), the
+production build, or Docker. Run `make test` for every test, `make build-frontend` for the build, and see the CI
+section below for what runs on every push.
 
 **Gates (the build fails below them):**
 
@@ -255,10 +259,17 @@ make check       # lint + coverage: the full quality gate, and what CI runs
 - **No order dependence:** tests do not rely on execution order. `go test -race -shuffle=on -count=3 ./...` and Vitest
   with file and test shuffling both pass. `make test` itself does not shuffle.
 
-**CI** (`.github/workflows/ci.yml`) runs the same `make` targets, in parallel backend and frontend jobs, and uploads
-`coverage/` and `frontend/coverage/` as artifacts. A third `docker` job runs after both: it builds the image
-(`make docker-build`), starts the container, waits for `/healthz`, and runs `make smoke` against it; if a step fails it
-prints the container's logs.
+**CI** (`.github/workflows/ci.yml`) does not call `make check`. It runs the individual `make` targets as three jobs,
+and uploads `coverage/` and `frontend/coverage/` as artifacts:
+
+| Job | Steps |
+|---|---|
+| `backend` | `make lint-backend`, `make test-backend` (all Go tests, including `cmd/server`), `make coverage-backend` |
+| `frontend` | `npm ci`, `make lint-frontend`, `make coverage-frontend`, `make build-frontend` |
+| `docker` (after both) | `make docker-build`, run the container, wait for `/healthz`, `make smoke`; prints the container's logs if a step fails |
+
+So CI runs everything `make check` runs (lint and coverage), plus the `cmd/server` tests, the production build and the
+Docker smoke test.
 
 ## Design decisions
 

@@ -47,7 +47,7 @@ lint-frontend: ## eslint + tsc + no fixed sleeps in frontend tests
 
 lint: lint-backend lint-frontend ## All linters
 
-check: lint coverage ## Full quality gate (what CI runs)
+check: lint coverage ## Lint + coverage gates (CI also runs test-backend, build-frontend and the docker job)
 
 build-frontend: ## Production build of the SPA (type-checks first)
 	cd $(FRONTEND) && npm run build
