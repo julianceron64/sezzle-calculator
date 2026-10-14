@@ -41,7 +41,7 @@ func NewHandler(calc Calculator, logger *slog.Logger, opts ...Option) http.Handl
 	root.HandleFunc("/healthz", a.health)
 	root.Handle("/api/", noStore(apiMux))
 	root.HandleFunc("/", http.NotFound)
-	return root
+	return requestID(accessLog(logger, recoverer(logger, root)))
 }
 
 // Option configures NewHandler.
@@ -128,7 +128,7 @@ func (a *api) calculate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		p := problemFor(err)
 		if p.Status >= http.StatusInternalServerError {
-			a.logger.ErrorContext(r.Context(), "calculate failed", "operation", op, "error", err)
+			a.logger.ErrorContext(r.Context(), "calculate failed", "operation", op, "error", err, "request_id", requestIDFrom(r.Context()))
 		}
 		writeProblem(w, p)
 		return
@@ -146,7 +146,7 @@ func (a *api) calculate(w http.ResponseWriter, r *http.Request) {
 func (a *api) writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(v); err != nil {
-		a.logger.ErrorContext(r.Context(), "encode response failed", "error", err)
+		a.logger.ErrorContext(r.Context(), "encode response failed", "error", err, "request_id", requestIDFrom(r.Context()))
 		writeProblem(w, newProblem(codeInternalError))
 		return
 	}
