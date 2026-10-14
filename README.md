@@ -119,7 +119,53 @@ by Go's `net/http` itself with a `400` `text/plain` response before any handler 
 
 ## Frontend
 
-<!-- TODO(spec-003): UX model, keyboard shortcuts -->
+React 19 + TypeScript (strict) + Vite, CSS Modules, no UI kit. Runtime dependencies are `react` and `react-dom` only.
+
+```bash
+make dev-backend    # API on :8080
+make dev-frontend   # UI on :5173, proxies /api to :8080
+cd frontend && npm test          # Vitest watch mode
+cd frontend && npm run coverage  # tests + coverage gates
+```
+
+`VITE_API_BASE_URL` overrides the API origin; unset means same-origin (the production setup, no CORS).
+
+### UX model
+
+A pocket calculator with **immediate execution**: binary operators run left to right with no precedence, so
+`2 + 3 × 4 =` is `20`, and each step is one API call. The frontend never computes a result: it only parses typed
+digits into request operands, and every number on screen after an operation comes from the backend.
+
+- `√` applies to the current value immediately (`2 + √9 =` shows `5`); `%` is "a percent of b" (`20 % 150 =` is `30`).
+- An operator right after an operator replaces it. `=` with no new operand does nothing (there is no "repeat last
+  operation"), and `C` clears and cancels an in-flight request.
+- While a request is pending the keys are `aria-disabled` (not `disabled`, so focus stays) and ignore presses; only `C`
+  stays active. Errors show `Error` on the display and a message below it, chosen by the backend's error `code`.
+- Results are displayed with 12 significant digits (`0.1 + 0.2` shows `0.3`) and switch to exponential notation at
+  `1e12` and above or below `1e-9`. The full-precision value is what is sent in the next request.
+- Input is limited to 15 digits. The frontend validates input format only; rules such as division by zero come from
+  the backend.
+
+**Assumption:** `±` on a result turns it into editable input holding the *12-digit display string*, so
+`0.30000000000000004 ±` becomes `-0.3`. This is lossy by design (exponential displays are left unchanged, because an
+exponential string is not valid input). `±` on a zero or on a number right after an operator does nothing.
+
+### Keyboard
+
+| Key | Action |
+|---|---|
+| `0`–`9` | digit |
+| `.` or `,` | decimal point |
+| `+` `-` `*` `/` | add, subtract, multiply, divide |
+| `^` | power |
+| `%` | percent of |
+| `r` | square root |
+| `Enter` or `=` | equals |
+| `Backspace` | delete last digit |
+| `Escape` or `Delete` | clear |
+
+Keys are ignored while Ctrl, Alt or Meta is held (Shift is allowed, since `+`, `*`, `^` and `%` need it on many
+layouts). Handled keys call `preventDefault()`, so `Enter` on a focused button does not also click it.
 
 ## Testing & coverage
 
