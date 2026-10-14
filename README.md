@@ -21,9 +21,28 @@ specs/      numbered specs with acceptance criteria       docs/DECISIONS.md   ar
 scripts/    coverage gate, no-sleeps check, smoke test    prompts/            prompts used to build this
 ```
 
+## Get the code
+
+```bash
+git clone https://github.com/julianceron64/sezzle-calculator.git
+cd sezzle-calculator
+```
+
+Next: if you only want to **run** it, follow [Quick start (Docker)](#quick-start-docker); if you want to **work on**
+it, follow [Local development](#local-development).
+
 ## Quick start (Docker)
 
-Prerequisites: Docker and make. `make docker-run` runs in the foreground, so use two terminals:
+Prerequisites:
+
+- **Docker, with the daemon running** (Docker Desktop on Windows and macOS). Tested with Docker 29.8.2.
+- **make**, for the shortcuts below (GNU Make 4.4.1). No make? See [Without make](#without-make).
+- **bash and curl**, for the smoke test, `scripts/smoke.sh` (GNU bash 5.2.37, curl 8.15.0). Git Bash on Windows
+  provides both.
+
+These versions are the ones this was tested with, on Windows 11 with Git Bash; Linux and macOS were not tried.
+
+`make docker-run` runs in the foreground, so use two terminals:
 
 ```bash
 # terminal 1: build the image and run it (UI + API on http://localhost:8080)
@@ -47,16 +66,56 @@ non-root user, and `docker ps` shows it as `healthy` after the first health chec
 captured output is in [`docs/VERIFICATION.md`](docs/VERIFICATION.md). To use another host port:
 `make docker-run PORT=9090`, then `make smoke BASE_URL=http://localhost:9090`.
 
-## Local development
+### Without make
 
-Prerequisites: Go ≥ 1.24, Node ≥ 22, make.
+These are the exact commands the Makefile runs (`make docker-build`, `make docker-run`, `make smoke`):
 
 ```bash
-cd frontend && npm ci   # once
-make dev-backend        # API on :8080
-make dev-frontend       # UI on :5173 (proxies /api → :8080)
-make check              # lint + typecheck + coverage gates (see "Testing & coverage" for what it leaves out)
+# build the image (make docker-build)
+docker build -t sezzle-calculator:local .
+
+# run it in the foreground (make docker-run): UI + API on http://localhost:8080
+docker run --rm -p 8080:8080 --name sezzle-calculator sezzle-calculator:local
+
+# in a second terminal: the smoke test (make smoke)
+bash scripts/smoke.sh                       # defaults to http://localhost:8080
+bash scripts/smoke.sh http://localhost:9090 # another base URL
+
+# stop the container; --rm removes it
+docker stop sezzle-calculator
 ```
+
+For another host port, change the left side of `-p`: `docker run --rm -p 9090:8080 ...`. The container always listens
+on 8080 inside. To run in the background, add `-d` (as in the detached example above).
+
+## Local development
+
+Prerequisites: Go ≥ 1.24, Node ≥ 22, make (tested with Go 1.27.2 and Node 22.18.0), after [getting the code](#get-the-code).
+
+1. Install the frontend dependencies once:
+
+   ```bash
+   cd frontend && npm ci && cd ..
+   ```
+
+2. In **terminal 1**, start the API (http://localhost:8080):
+
+   ```bash
+   make dev-backend
+   ```
+
+3. In **terminal 2**, start the frontend dev server, and open **http://localhost:5173**. It proxies `/api` to the API
+   on port 8080, so terminal 1 must be running:
+
+   ```bash
+   make dev-frontend
+   ```
+
+4. Before committing, run the local quality gate (see "Testing & coverage" for what it leaves out):
+
+   ```bash
+   make check   # lint + typecheck + coverage gates
+   ```
 
 ## API
 
