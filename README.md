@@ -93,7 +93,10 @@ Every error under `/api/` is `application/problem+json` (RFC 9457) with `type`, 
 When a request breaks several rules, the first applies: 404/405 → 415 → 413 / `INVALID_JSON` → `UNKNOWN_FIELD` →
 `INVALID_OPERAND` / `MISSING_OPERAND` (operand `a` is checked before `b`) → `UNEXPECTED_OPERAND`.
 
-Known edge: Go's router redirects non-canonical paths such as `/api//v1/add` (301) before the handlers run.
+Non-canonical paths under `/api` (`/api`, `/api//v1/add`, `/api/v1/../v1/add`) are `404 NOT_FOUND` problems, never redirects.
+
+Known limit: a request whose target is not valid HTTP, such as `GET /api/v1/%zz` (bad percent-encoding), is rejected
+by Go's `net/http` itself with a `400` `text/plain` response before any handler runs, so it cannot be a problem+json.
 
 ## Operation semantics
 
