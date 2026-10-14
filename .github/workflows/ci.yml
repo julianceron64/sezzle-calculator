@@ -59,3 +59,6 @@ jobs:
       - run: |
           for i in $(seq 1 20); do curl -fsS http://localhost:8080/healthz && break; sleep 1; done
       - run: make smoke
+      - name: Container logs
+        if: failure()
+        run: docker logs sezzle-calculator || true
