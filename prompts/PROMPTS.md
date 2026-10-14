@@ -70,7 +70,7 @@ these are the prompts I typed:
 | 002 HTTP API `[log 00:41]` | `[log 00:47]`: `answers: 1. variadic options 2. option A 3. option A` + `approve plan` | `[log 01:01]`: wrapper so non-canonical `/api` paths return problem+json; document the `%zz` limit |
 | 003 frontend `[log 01:03]` | `[log 01:06]`: `aprove, all recommended` (the lint-stack question was answered in an interactive choice, not a prompt) | `[log 01:30]`: make the stale-response test discriminating, replace test casts, drop unreachable branches |
 | 004 quality `[log 01:36]` | `[log 01:38]`: `approve, all recommended` | `[log 01:55]`: close the unset `VITE_API_BASE_URL` coverage gap; I run `/review 004` myself |
-| 005 delivery `[log 01:57]` | `[log 02:03]`: `approve, all recommended` | (pending `/review 005`) |
+| 005 delivery `[log 01:57]` | `[log 02:03]`: `approve, all recommended` | `/review 005` `[log 02:17]`; then `[log 02:25]`: reword the corrections provenance, record real Docker output in `docs/VERIFICATION.md`, mention the `docker` job in the README, add a CI log step |
 
 The approval for spec 001, which set the standard for the rest `[log 00:16]`:
 
@@ -99,12 +99,16 @@ small groups (test:, refactor:, docs:), then commit prompts/session-log.md as ch
 mark spec 003 done in specs/README.md. No push. Give me the commit list and stop.
 ```
 
-Because these fix prompts arrive as pasted blocks, Claude asked me to confirm before acting on them each time; the
-short `go, confirmed` / `go` entries in the log are those confirmations.
+Each of the five fix-round blocks in the table above was followed in the log by a short `go, confirmed` or `go` as a
+separate prompt: `[log 00:40]` (`session-log.md` line 255), `[log 01:01]`
+(line 364), `[log 01:30]` (line 476), `[log 01:55]` (line 507) and `[log 02:26]` (line 634).
 
 ## 03 — Notable corrections
 
-What went wrong or was incomplete, and what changed. Each item is traceable in the commit history.
+What went wrong or was incomplete, and what changed. Each item can be traced in the commit history, in the review
+reports and prompts recorded in [`session-log.md`](session-log.md), or in the session transcript. The transcript is not
+part of this repository, so items that rest **only** on it are marked *(transcript only)*; for those, the repository
+shows only the corrected result, not the mistake.
 
 **Planning (before any code)**
 
@@ -116,16 +120,17 @@ What went wrong or was incomplete, and what changed. Each item is traceable in t
 
 - Review: the comparison helper applied the `1e-12` tolerance to **every** case, so `add(2,3) = 5.000000000001`
   would have passed. Fixed with an `approx` flag that defaults to exact equality, and a test that rejects near misses.
-- My underflow example (`1e-308 / 1e10`) was wrong: it gives the subnormal `1e-318`, not `0`. Claude used
-  `1e-308 / 1e20`, which really underflows, and said so.
+- My underflow example (`1e-308 / 1e10`, in the `[log 00:38]` prompt) was wrong: it gives the subnormal `1e-318`, not
+  `0`. Claude used `1e-308 / 1e20`, which really underflows; the test comment in `calculator_test.go` explains it.
 - Claude committed a failing test once (a pipeline hid the exit status) and amended its own unpushed commit.
+  *(transcript only)*
 
 **Spec 002**
 
-- Claude's plan accepted "Go's router redirects non-canonical paths" as a documented edge. The review showed it
-  contradicted the spec (`GET /api` returned a `307` with an HTML body) and the README even named the wrong status.
-  Fixed with a wrapper and tests; the one case that cannot be fixed (`/api/v1/%zz`, rejected by `net/http` itself) is
-  documented as a known limit.
+- Claude's plan accepted "Go's router redirects non-canonical paths" as a documented edge *(the plan text is
+  transcript only)*. The review `[log 00:57]` showed it contradicted the spec (`GET /api` returned a `307` with an
+  HTML body) and the README even named the wrong status. Fixed with a wrapper and tests; the one case that cannot be
+  fixed (`/api/v1/%zz`, rejected by `net/http` itself) is documented as a known limit.
 - The spec said the request DTO uses `*float64`, but that cannot tell `"b": null` from a missing `b`, which another rule
   requires. Resolved with a small `operand` type that never fails during decoding, so an unknown field is always reported
   first regardless of key order.
@@ -133,10 +138,11 @@ What went wrong or was incomplete, and what changed. Each item is traceable in t
 **Spec 003**
 
 - The current `create-vite` template no longer ships ESLint (only `oxlint`), which conflicts with ADR-008. Claude
-  stopped and asked; I chose the ESLint 9 stack, with the extra dev-only dependencies named up front.
-- MSW 3 renamed `onUnhandledRequest` to `onUnhandledFrame`; the old name was silently ignored at runtime and only
-  `tsc` caught it.
-- Review: the "late response is ignored" integration test passed even with the reducer's id guard deleted, because the
+  stopped and asked; I chose the ESLint 9 stack, with the extra dev-only dependencies named up front. *(The question
+  and my answer were an interactive choice, so they are transcript only; the result is in `frontend/package.json`.)*
+- MSW 3 renamed `onUnhandledRequest` to `onUnhandledFrame`; the rename is noted in the README's test notes. That the old
+  name was silently ignored at runtime and only `tsc` caught it is *(transcript only)*.
+- Review `[log 01:27]`: the "late response is ignored" integration test passed even with the reducer's id guard deleted, because the
   real client already rejects on abort. The suggested fix (have the MSW handler ignore the signal) could not work for
   the same reason; Claude proved that by removing the guard, then tested the hook with a fake client that ignores the
   abort signal, and showed that test failing without the guard.
@@ -147,22 +153,25 @@ What went wrong or was incomplete, and what changed. Each item is traceable in t
 
 - A "gofmt must fail" check passed by accident: a formatter hook rewrote the deliberately unformatted file before
   `make` saw it. Claude noticed the exit code was wrong, redid the proof through the shell, and did not count the first
-  run.
+  run. *(transcript only)*
 - Claude's own coverage notes were checked against the code before being committed: two explanations were wrong and a
-  third incomplete. This also found a real untested branch (`VITE_API_BASE_URL` unset), fixed in a follow-up.
+  third incomplete *(transcript only; `docs/COVERAGE.md` shows the corrected text)*. The check also found a real
+  untested branch (`VITE_API_BASE_URL` unset), fixed in a follow-up commit.
 
 **Spec 005**
 
 - A `smoke.sh` staged earlier was absorbed into the Docker commit; Claude noticed the failed second commit, undid its own
-  unpushed commit with a soft reset and recommitted the two pieces separately.
+  unpushed commit with a soft reset and recommitted the two pieces separately. *(transcript only, plus a local reflog
+  entry that is not in the repository)*
 - A README claim ("healthy within a few seconds") was not measured and contradicted the 10 s health-check interval, so
-  it was corrected before committing.
+  it was corrected before committing. *(transcript only)*
 - Port 8080 was already in use by a `server.exe` that Claude had not started, so it verified the container on another
-  host port instead of stopping that process.
+  host port instead of stopping that process. `docs/VERIFICATION.md` records that port 8080 was busy; which process held
+  it is *(transcript only)*.
 
 **Process**
 
 - Two of Claude's shell commands were denied by my permission prompt (an unnecessary `git rm --cached -r .`, and a
-  compound command with an `rm -rf` on a variable path). Claude split them into smaller steps.
+  compound command with an `rm -rf` on a variable path). Claude split them into smaller steps. *(transcript only)*
 - `session-log.md` also records hook-generated entries (subagent hand-backs, background-task notices). Those are not
   prompts I wrote.
