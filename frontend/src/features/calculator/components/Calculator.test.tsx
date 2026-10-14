@@ -308,7 +308,9 @@ describe('Calculator: while a request is pending', () => {
     await waitFor(() => expect(display()).toHaveTextContent(/^3$/));
   });
 
-  it('C aborts the request and a late response does not change the display', async () => {
+  // The real client rejects once aborted, so a late body never reaches the
+  // hook here; the id guard itself is proven in Calculator.stale.test.tsx.
+  it('C aborts the in-flight request and the next request completes normally', async () => {
     const first = deferredResponse();
     let firstSignal: AbortSignal | undefined;
     server.use(
