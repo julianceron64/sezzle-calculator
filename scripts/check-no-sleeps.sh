@@ -10,18 +10,33 @@ root="${2:-$(cd "$(dirname "$0")/.." && pwd)}"
 status=0
 
 # scan <label> <dir> <pattern> <include glob>...
+# A missing directory or a grep error is exit 2, never a pass: if a directory is
+# renamed, a gate that quietly found nothing to scan would stay green forever.
 scan() {
   local label="$1" dir="$2" pattern="$3"
   shift 3
   local includes=()
   for glob in "$@"; do includes+=(--include="$glob"); done
-  local hits
-  hits=$(grep -rnE "${includes[@]}" "$pattern" "$dir" || true)
-  if [ -n "$hits" ]; then
-    echo "FAIL: fixed sleep in $label tests (use event-driven waiting):" >&2
-    echo "$hits" >&2
-    status=1
+
+  if [ ! -d "$dir" ]; then
+    echo "ERROR: cannot scan $label tests: $dir is not a directory (renamed? update $0)" >&2
+    exit 2
   fi
+
+  local hits rc=0
+  hits=$(grep -rnE "${includes[@]}" "$pattern" "$dir") || rc=$?
+  case "$rc" in
+    0)
+      echo "FAIL: fixed sleep in $label tests (use event-driven waiting):" >&2
+      echo "$hits" >&2
+      status=1
+      ;;
+    1) ;; # no match: clean
+    *)
+      echo "ERROR: grep failed (exit $rc) while scanning $label tests in $dir" >&2
+      exit 2
+      ;;
+  esac
 }
 
 case "$scope" in
