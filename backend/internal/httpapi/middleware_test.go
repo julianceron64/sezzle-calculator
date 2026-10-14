@@ -138,7 +138,7 @@ func TestAccessLog(t *testing.T) {
 	t.Parallel()
 	buf := &syncBuffer{}
 	h := NewHandler(calculator.New(), jsonLogger(buf))
-	r := httptest.NewRequest("POST", "/api/v1/divide", strings.NewReader(`{"a":1,"b":0,"note":"topsecret"}`))
+	r := httptest.NewRequest("POST", "/api/v1/add", strings.NewReader(`{"a":1,"b":0,"note":"topsecret"}`))
 	r.Header.Set("Content-Type", jsonCT)
 	r.Header.Set("X-Request-ID", "req-42")
 	h.ServeHTTP(httptest.NewRecorder(), r)
@@ -152,7 +152,7 @@ func TestAccessLog(t *testing.T) {
 			continue
 		}
 		found = true
-		if l["method"] != "POST" || l["path"] != "/api/v1/divide" || l["status"] != float64(400) || l["request_id"] != "req-42" {
+		if l["method"] != "POST" || l["path"] != "/api/v1/add" || l["status"] != float64(400) || l["request_id"] != "req-42" {
 			t.Errorf("access log = %v", l)
 		}
 		if _, ok := l["duration"]; !ok {
@@ -193,13 +193,13 @@ func TestRecover_Panic500AndKeepsServing(t *testing.T) {
 	if resp.Header.Get("Cache-Control") != "no-store" || resp.Header.Get("X-Request-ID") != "panic-req-1" {
 		t.Errorf("headers lost on panic: %v", resp.Header)
 	}
-	if strings.Contains(p["detail"].(string), "boom") {
+	if strings.Contains(toString(p["detail"]), "boom") {
 		t.Errorf("detail leaks the panic value: %v", p["detail"])
 	}
 
 	var logged bool
 	for _, l := range logLines(t, buf) {
-		if l["level"] == "ERROR" && l["request_id"] == "panic-req-1" && strings.Contains(l["msg"].(string)+toString(l["panic"]), "boom") {
+		if l["level"] == "ERROR" && l["request_id"] == "panic-req-1" && strings.Contains(toString(l["msg"])+toString(l["panic"]), "boom") {
 			logged = true
 		}
 	}
@@ -221,4 +221,31 @@ func TestRecover_Panic500AndKeepsServing(t *testing.T) {
 func toString(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// API-08: the access log sits outside recover, so a recovered panic is logged as status 500.
+// ServeHTTP is called directly: the access line is written after the handler returns,
+// which a network client could observe before it exists.
+func TestRecover_PanicIsLoggedAsStatus500(t *testing.T) {
+	t.Parallel()
+	buf := &syncBuffer{}
+	calc := fakeCalc{func(calculator.Op, ...float64) (float64, error) { panic("boom") }}
+	r := httptest.NewRequest("POST", "/api/v1/add", strings.NewReader(`{"a":1,"b":2}`))
+	r.Header.Set("Content-Type", jsonCT)
+	r.Header.Set("X-Request-ID", "panic-req-2")
+	rec := httptest.NewRecorder()
+	NewHandler(calc, jsonLogger(buf)).ServeHTTP(rec, r)
+
+	if rec.Code != 500 {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	for _, l := range logLines(t, buf) {
+		if l["msg"] == "request" && l["request_id"] == "panic-req-2" {
+			if l["status"] != float64(500) {
+				t.Fatalf("access log status = %v, want 500", l["status"])
+			}
+			return
+		}
+	}
+	t.Fatalf("no access log line for the panicking request: %s", buf.String())
 }
