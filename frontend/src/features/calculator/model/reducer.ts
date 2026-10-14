@@ -8,6 +8,7 @@ import type {
   Digit,
   Pending,
   State,
+  UnaryOp,
 } from './types';
 
 const MAX_DIGITS = 15;
@@ -126,15 +127,35 @@ function decimal(state: State): State {
   }
 }
 
+const flipSign = (text: string) =>
+  text.startsWith('-') ? text.slice(1) : `-${text}`;
+
 function toggleSign(state: State): State {
-  if (state.status !== 'editing') return state;
-  const { input } = state;
-  // Committed left operand (12a) or a zero input (12e, never "-0"): no-op.
-  if (input === null || Number(input) === 0) return state;
-  return {
-    ...state,
-    input: input.startsWith('-') ? input.slice(1) : `-${input}`,
-  };
+  switch (state.status) {
+    case 'editing': {
+      const { input } = state;
+      // Committed left operand (12a) or a zero input (12e, never "-0"): no-op.
+      if (input === null || Number(input) === 0) return state;
+      return { ...state, input: flipSign(input) };
+    }
+    case 'result': {
+      // 12d: the input holds the 12-digit display string (lossy). An
+      // exponential string is not valid input (ADR-009), and zero stays zero.
+      const text = formatNumber(state.value);
+      if (state.value === 0 || text.includes('e')) return state;
+      return {
+        status: 'editing',
+        input: flipSign(text),
+        pending: state.pending,
+        nextId: state.nextId,
+      };
+    }
+    case 'error':
+    case 'evaluating':
+      return state;
+    default:
+      return assertNever(state);
+  }
 }
 
 function backspace(state: State): State {
@@ -185,6 +206,46 @@ function binaryOp(state: State, op: BinaryOp): State {
         formatNumber(value),
       );
     }
+    case 'error':
+    case 'evaluating':
+      return state;
+    default:
+      return assertNever(state);
+  }
+}
+
+function unaryOp(state: State, op: UnaryOp): State {
+  switch (state.status) {
+    case 'editing': {
+      const { input, pending } = state;
+      if (input === null) {
+        // 12c: evaluate on the displayed left operand.
+        return pending
+          ? startEvaluation(
+              state,
+              { op, operands: [pending.left] },
+              { kind: 'unary-left', pending },
+              pending,
+              formatNumber(pending.left),
+            )
+          : state;
+      }
+      return startEvaluation(
+        state,
+        { op, operands: [Number(input)] },
+        { kind: 'unary-operand' },
+        pending,
+        input,
+      );
+    }
+    case 'result':
+      return startEvaluation(
+        state,
+        { op, operands: [state.value] },
+        { kind: 'unary-operand' },
+        state.pending,
+        formatNumber(state.value),
+      );
     case 'error':
     case 'evaluating':
       return state;
@@ -245,8 +306,19 @@ function evalSuccess(state: State, id: number, result: number): State {
         nextId: state.nextId,
       };
     case 'unary-operand':
+      return {
+        status: 'result',
+        value: result,
+        pending: state.pending,
+        nextId: state.nextId,
+      };
     case 'unary-left':
-      return state; // next increment
+      return {
+        status: 'editing',
+        input: null,
+        pending: { ...then.pending, left: result },
+        nextId: state.nextId,
+      };
     default:
       return assertNever(then);
   }
@@ -278,7 +350,7 @@ export function reduce(state: State, action: Action): State {
     case 'EVAL_FAILURE':
       return evalFailure(state, action.id, action.error);
     case 'UNARY_OP':
-      return state; // next increment
+      return unaryOp(state, action.op);
     default:
       return assertNever(action);
   }

@@ -27,7 +27,7 @@ export type Continuation =
   /** Rule 6: the result replaces the current value; the pending operator is kept. */
   | { kind: 'unary-operand' }
   /** Rule 12c: the result replaces the committed left operand. */
-  | { kind: 'unary-left' };
+  | { kind: 'unary-left'; pending: Pending };
 
 interface Base {
   /** Id of the next request. Lives in every status and is never reset (12f). */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getDisplay, getExpression, initialState, reduce } from './reducer';
-import type { Action, BinaryOp, Digit, State } from './types';
+import type { Action, BinaryOp, Digit, Pending, State } from './types';
 
 const BINARY: Record<string, BinaryOp> = {
   '+': 'add',
@@ -322,6 +322,197 @@ describe('rule 9: stale responses', () => {
       state,
     );
     expect(reduce(state, { type: 'EVAL_FAILURE', id: 1, error })).toBe(state);
+  });
+});
+
+// FE-01, rule 6
+describe('rule 6: unary operator', () => {
+  it('evaluates on the typed value and keeps the pending operator (2 + √9 = 5)', () => {
+    const state = fresh('2+9√');
+    expect(evaluating(state).request).toEqual({
+      id: 1,
+      op: 'sqrt',
+      operands: [9],
+    });
+    expect(evaluating(state).pending).toEqual({ op: 'add', left: 2 });
+
+    const root = resolve(state, 3);
+    expect(root).toMatchObject({
+      status: 'result',
+      value: 3,
+      pending: { op: 'add', left: 2 },
+    });
+    expect(getExpression(root)).toBe('2 +');
+
+    const sum = press(root, '=');
+    expect(evaluating(sum).request).toEqual({
+      id: 2,
+      op: 'add',
+      operands: [2, 3],
+    });
+    expect(resolve(sum, 5)).toMatchObject({ status: 'result', value: 5 });
+  });
+
+  it('without a pending operator the result replaces the current value', () => {
+    expect(resolve(fresh('9√'), 3)).toEqual({
+      status: 'result',
+      value: 3,
+      pending: null,
+      nextId: 2,
+    });
+  });
+
+  it('applies to a previous result', () => {
+    const next = press(resolve(fresh('9√'), 3), '√');
+    expect(evaluating(next).request).toEqual({
+      id: 2,
+      op: 'sqrt',
+      operands: [3],
+    });
+  });
+
+  it('a binary operator after the unary result evaluates the pending operation', () => {
+    const next = press(resolve(fresh('2+9√'), 3), '×');
+    expect(evaluating(next).request).toEqual({
+      id: 2,
+      op: 'add',
+      operands: [2, 3],
+    });
+  });
+});
+
+// FE-01, rule 12a
+describe('rule 12a: toggle sign on a committed left operand', () => {
+  it('is a no-op and the next operand still evaluates', () => {
+    const committed = fresh('2+');
+    expect(reduce(committed, { type: 'TOGGLE_SIGN' })).toBe(committed);
+    expect(evaluating(press(committed, '±3=')).request).toEqual({
+      id: 1,
+      op: 'add',
+      operands: [2, 3],
+    });
+  });
+});
+
+// FE-01, rule 12b
+describe('rule 12b: backspace on a committed left operand', () => {
+  it('is a no-op', () => {
+    const committed = fresh('2+');
+    expect(reduce(committed, { type: 'BACKSPACE' })).toBe(committed);
+  });
+});
+
+// FE-01, rule 12c
+describe('rule 12c: unary operator on a committed left operand', () => {
+  const requested = () => fresh('2+√');
+
+  it('evaluates on the displayed left operand and keeps the pending operator', () => {
+    const state = evaluating(requested());
+    expect(state.request).toEqual({ id: 1, op: 'sqrt', operands: [2] });
+    expect(state.pending).toEqual({ op: 'add', left: 2 });
+  });
+
+  it('replaces the left operand with the result, and EQUALS is a no-op until a digit', () => {
+    const root = resolve(requested(), 1.5);
+    expect(root).toMatchObject({
+      status: 'editing',
+      input: null,
+      pending: { op: 'add', left: 1.5 },
+    });
+    expect(getDisplay(root)).toBe('1.5');
+    expect(reduce(root, { type: 'EQUALS' })).toBe(root);
+
+    const fresher = press(root, '3');
+    expect(getDisplay(fresher)).toBe('3');
+    expect(evaluating(press(fresher, '=')).request).toEqual({
+      id: 2,
+      op: 'add',
+      operands: [1.5, 3],
+    });
+  });
+});
+
+// FE-01, rule 12d
+describe('rule 12d: toggle sign on a result', () => {
+  const resultOf = (value: number, pending: Pending | null = null): State => ({
+    status: 'result',
+    value,
+    pending,
+    nextId: 5,
+  });
+
+  it('turns a plain result into editable input with the sign flipped', () => {
+    expect(reduce(resultOf(0.3), { type: 'TOGGLE_SIGN' })).toEqual({
+      status: 'editing',
+      input: '-0.3',
+      pending: null,
+      nextId: 5,
+    });
+    expect(reduce(resultOf(-0.3), { type: 'TOGGLE_SIGN' })).toMatchObject({
+      input: '0.3',
+    });
+  });
+
+  it('is lossy: the input holds the 12-digit display string', () => {
+    expect(
+      reduce(resultOf(0.30000000000000004), { type: 'TOGGLE_SIGN' }),
+    ).toMatchObject({ status: 'editing', input: '-0.3' });
+  });
+
+  it('is a no-op on an exponential result', () => {
+    const state = resultOf(1e15);
+    expect(reduce(state, { type: 'TOGGLE_SIGN' })).toBe(state);
+  });
+
+  it('keeps the pending operator', () => {
+    const state = resultOf(3, { op: 'add', left: 2 });
+    expect(reduce(state, { type: 'TOGGLE_SIGN' })).toMatchObject({
+      input: '-3',
+      pending: { op: 'add', left: 2 },
+    });
+  });
+});
+
+// FE-01, rule 12e
+describe('rule 12e: toggle sign on zero', () => {
+  it('is a no-op on a result of 0', () => {
+    const state = resolve(fresh('0+0='), 0);
+    expect(reduce(state, { type: 'TOGGLE_SIGN' })).toBe(state);
+  });
+
+  it('leaves the input unchanged so 0 ± + 5 = evaluates 0 + 5', () => {
+    expect(evaluating(fresh('0±+5=')).request).toEqual({
+      id: 1,
+      op: 'add',
+      operands: [0, 5],
+    });
+  });
+});
+
+// FE-01, rule 12f
+describe('rule 12f: request ids', () => {
+  it('gives consecutive evaluations consecutive ids', () => {
+    const start: State = { ...initialState, nextId: 7 };
+    const first = press(start, '2+3=');
+    expect(evaluating(first).request.id).toBe(7);
+    const second = press(resolve(first, 5), '+4=');
+    expect(evaluating(second).request.id).toBe(8);
+    expect(second.nextId).toBe(9);
+  });
+
+  it('never lets a late response of an aborted request match a later one', () => {
+    const first = fresh('2+3='); // request id 1
+    expect(evaluating(first).request.id).toBe(1);
+    const cleared = reduce(first, { type: 'CLEAR' });
+    expect(cleared.nextId).toBe(2);
+
+    const second = press(cleared, '4+5='); // request id 2
+    expect(evaluating(second).request.id).toBe(2);
+
+    const late = reduce(second, { type: 'EVAL_SUCCESS', id: 1, result: 5 });
+    expect(late).toBe(second);
+    expect(getDisplay(late)).toBe('5');
+    expect(getExpression(late)).toBe('4 +');
   });
 });
 
