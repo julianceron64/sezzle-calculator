@@ -37,9 +37,15 @@ interface Base {
 export type State =
   | (Base & {
       status: 'editing';
-      /** Digits as typed. `null`: a committed left operand, no digits typed yet. */
-      input: string | null;
+      /** Digits as typed. */
+      input: string;
       pending: Pending | null;
+    })
+  | (Base & {
+      status: 'editing';
+      /** A committed left operand: no digits typed yet, so an operator is pending. */
+      input: null;
+      pending: Pending;
     })
   | (Base & { status: 'result'; value: number; pending: Pending | null })
   | (Base & {

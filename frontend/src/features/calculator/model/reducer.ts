@@ -35,7 +35,9 @@ const countDigits = (input: string) => input.replace(/[-.]/g, '').length;
 export function getDisplay(state: State): string {
   switch (state.status) {
     case 'editing':
-      return state.input ?? formatNumber(state.pending?.left ?? 0);
+      return state.input === null
+        ? formatNumber(state.pending.left)
+        : state.input;
     case 'result':
       return formatNumber(state.value);
     case 'evaluating':
@@ -170,11 +172,11 @@ function backspace(state: State): State {
 function binaryOp(state: State, op: BinaryOp): State {
   switch (state.status) {
     case 'editing': {
-      const { input, pending } = state;
-      if (input === null) {
+      if (state.input === null) {
         // Rule 3: an operator right after an operator replaces it.
-        return pending ? { ...state, pending: { ...pending, op } } : state;
+        return { ...state, pending: { ...state.pending, op } };
       }
+      const { input, pending } = state;
       if (!pending) {
         // Rule 2: the current value becomes the left operand.
         return { ...state, input: null, pending: { op, left: Number(input) } };
@@ -217,19 +219,18 @@ function binaryOp(state: State, op: BinaryOp): State {
 function unaryOp(state: State, op: UnaryOp): State {
   switch (state.status) {
     case 'editing': {
-      const { input, pending } = state;
-      if (input === null) {
+      if (state.input === null) {
         // 12c: evaluate on the displayed left operand.
-        return pending
-          ? startEvaluation(
-              state,
-              { op, operands: [pending.left] },
-              { kind: 'unary-left', pending },
-              pending,
-              formatNumber(pending.left),
-            )
-          : state;
+        const { pending } = state;
+        return startEvaluation(
+          state,
+          { op, operands: [pending.left] },
+          { kind: 'unary-left', pending },
+          pending,
+          formatNumber(pending.left),
+        );
       }
+      const { input, pending } = state;
       return startEvaluation(
         state,
         { op, operands: [Number(input)] },
