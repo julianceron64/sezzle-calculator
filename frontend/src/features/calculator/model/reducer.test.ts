@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDisplay, initialState, reduce } from './reducer';
+import { getDisplay, getExpression, initialState, reduce } from './reducer';
 import type { Action, BinaryOp, Digit, State } from './types';
 
 const BINARY: Record<string, BinaryOp> = {
@@ -42,6 +42,22 @@ function press(state: State, keys: string): State {
 }
 
 const fresh = (keys: string) => press(initialState, keys);
+
+function evaluating(state: State) {
+  if (state.status !== 'evaluating') {
+    throw new Error(`expected evaluating, got ${state.status}`);
+  }
+  return state;
+}
+
+/** Delivers a successful response for the request currently in flight. */
+function resolve(state: State, result: number): State {
+  return reduce(evaluating(state), {
+    type: 'EVAL_SUCCESS',
+    id: evaluating(state).request.id,
+    result,
+  });
+}
 
 describe('initial state', () => {
   it('is editing "0" with no pending operator and ids starting at 1', () => {
@@ -128,5 +144,236 @@ describe('rule 11: CLEAR', () => {
       ...initialState,
       nextId: 7,
     });
+  });
+});
+
+// FE-01, rule 2
+describe('rule 2: first binary operator', () => {
+  it('commits the current value as the left operand', () => {
+    const state = fresh('2+');
+    expect(state).toMatchObject({
+      status: 'editing',
+      input: null,
+      pending: { op: 'add', left: 2 },
+    });
+    expect(getDisplay(state)).toBe('2');
+    expect(getExpression(state)).toBe('2 +');
+  });
+
+  it('starts a new input with the next digit or decimal point', () => {
+    expect(getDisplay(fresh('2+3'))).toBe('3');
+    expect(getDisplay(fresh('2+.'))).toBe('0.');
+  });
+
+  it('shows the operator symbol for every binary operation', () => {
+    expect(getExpression(fresh('2−'))).toBe('2 −');
+    expect(getExpression(fresh('2×'))).toBe('2 ×');
+    expect(getExpression(fresh('2÷'))).toBe('2 ÷');
+    expect(getExpression(fresh('2^'))).toBe('2 ^');
+    expect(getExpression(fresh('20%'))).toBe('20 % of');
+    expect(getExpression(initialState)).toBe('');
+  });
+});
+
+// FE-01, rule 3
+describe('rule 3: operator right after an operator', () => {
+  it('replaces the pending operator without a request', () => {
+    expect(fresh('2+×')).toMatchObject({
+      status: 'editing',
+      input: null,
+      pending: { op: 'multiply', left: 2 },
+    });
+  });
+});
+
+// FE-01, rule 4
+describe('rule 4: operator with a pending operation', () => {
+  it('evaluates the pending operation as data, then chains the new operator', () => {
+    const state = fresh('2+3×');
+    expect(evaluating(state).request).toEqual({
+      id: 1,
+      op: 'add',
+      operands: [2, 3],
+    });
+    expect(getDisplay(state)).toBe('3');
+
+    const chained = resolve(state, 5);
+    expect(chained).toMatchObject({
+      status: 'editing',
+      input: null,
+      pending: { op: 'multiply', left: 5 },
+    });
+    expect(getDisplay(chained)).toBe('5');
+    expect(getExpression(chained)).toBe('5 ×');
+  });
+
+  it('evaluates left to right without precedence (2 + 3 × 4 = 20)', () => {
+    const second = press(resolve(fresh('2+3×'), 5), '4=');
+    expect(evaluating(second).request).toEqual({
+      id: 2,
+      op: 'multiply',
+      operands: [5, 4],
+    });
+    expect(resolve(second, 20)).toMatchObject({ status: 'result', value: 20 });
+  });
+});
+
+// FE-01, rule 5
+describe('rule 5: equals', () => {
+  it('evaluates the pending operation and shows the result', () => {
+    const state = fresh('20%150=');
+    expect(evaluating(state).request).toEqual({
+      id: 1,
+      op: 'percentage',
+      operands: [20, 150],
+    });
+    const done = resolve(state, 30);
+    expect(done).toEqual({
+      status: 'result',
+      value: 30,
+      pending: null,
+      nextId: 2,
+    });
+    expect(getDisplay(done)).toBe('30');
+    expect(getExpression(done)).toBe('');
+  });
+
+  it('is a no-op without a pending operator or without a new operand', () => {
+    const typed = fresh('5');
+    expect(reduce(typed, { type: 'EQUALS' })).toBe(typed);
+    const committed = fresh('2+');
+    expect(reduce(committed, { type: 'EQUALS' })).toBe(committed);
+    const result = resolve(fresh('2+3='), 5);
+    expect(reduce(result, { type: 'EQUALS' })).toBe(result); // no "repeat last op"
+  });
+});
+
+// FE-01, rule 7
+describe('rule 7: after a result', () => {
+  const result = () => resolve(fresh('2+3='), 5);
+
+  it('starts a fresh input with a digit or decimal point', () => {
+    expect(result()).toMatchObject({ status: 'result', value: 5 });
+    expect(press(result(), '7')).toMatchObject({
+      status: 'editing',
+      input: '7',
+      pending: null,
+    });
+    expect(getDisplay(press(result(), '.'))).toBe('0.');
+  });
+
+  it('ignores backspace', () => {
+    const state = result();
+    expect(reduce(state, { type: 'BACKSPACE' })).toBe(state);
+  });
+
+  it('uses the result as the left operand of the next operator', () => {
+    expect(press(result(), '×')).toMatchObject({
+      status: 'editing',
+      input: null,
+      pending: { op: 'multiply', left: 5 },
+    });
+  });
+});
+
+// FE-01, rule 8
+describe('rule 8: while evaluating', () => {
+  const busy = () => fresh('2+3=');
+
+  it('ignores every action except CLEAR and EVAL_*', () => {
+    const state = busy();
+    const ignored: Action[] = [
+      { type: 'DIGIT', digit: '4' },
+      { type: 'DECIMAL' },
+      { type: 'TOGGLE_SIGN' },
+      { type: 'BACKSPACE' },
+      { type: 'BINARY_OP', op: 'multiply' },
+      { type: 'UNARY_OP', op: 'sqrt' },
+      { type: 'EQUALS' },
+    ];
+    for (const action of ignored) {
+      expect(reduce(state, action)).toBe(state);
+    }
+  });
+
+  it('CLEAR resets to the initial state but keeps nextId', () => {
+    expect(reduce(busy(), { type: 'CLEAR' })).toEqual({
+      ...initialState,
+      nextId: 2,
+    });
+  });
+});
+
+// FE-01, rule 9
+describe('rule 9: stale responses', () => {
+  const error = { code: 'TIMEOUT' } as const;
+
+  it('ignores EVAL_* whose id is not the current request', () => {
+    const state = fresh('2+3=');
+    expect(reduce(state, { type: 'EVAL_SUCCESS', id: 99, result: 5 })).toBe(
+      state,
+    );
+    expect(reduce(state, { type: 'EVAL_FAILURE', id: 99, error })).toBe(state);
+  });
+
+  it('ignores EVAL_* when nothing is in flight', () => {
+    const state = fresh('5');
+    expect(reduce(state, { type: 'EVAL_SUCCESS', id: 1, result: 5 })).toBe(
+      state,
+    );
+    expect(reduce(state, { type: 'EVAL_FAILURE', id: 1, error })).toBe(state);
+  });
+});
+
+// FE-01, rule 10
+describe('rule 10: failure', () => {
+  const failed = () => {
+    const state = fresh('1÷0=');
+    return reduce(state, {
+      type: 'EVAL_FAILURE',
+      id: evaluating(state).request.id,
+      error: { code: 'DIVISION_BY_ZERO', status: 422 },
+    });
+  };
+
+  it('moves to the error status and displays "Error"', () => {
+    expect(failed()).toEqual({
+      status: 'error',
+      error: { code: 'DIVISION_BY_ZERO', status: 422 },
+      nextId: 2,
+    });
+    expect(getDisplay(failed())).toBe('Error');
+    expect(getExpression(failed())).toBe('');
+  });
+
+  it('starts clean on the next digit', () => {
+    expect(press(failed(), '7')).toEqual({
+      status: 'editing',
+      input: '7',
+      pending: null,
+      nextId: 2,
+    });
+  });
+
+  it('starts clean on CLEAR', () => {
+    expect(reduce(failed(), { type: 'CLEAR' })).toEqual({
+      ...initialState,
+      nextId: 2,
+    });
+  });
+
+  it('ignores other keys', () => {
+    const state = failed();
+    const ignored: Action[] = [
+      { type: 'DECIMAL' },
+      { type: 'TOGGLE_SIGN' },
+      { type: 'BACKSPACE' },
+      { type: 'BINARY_OP', op: 'add' },
+      { type: 'UNARY_OP', op: 'sqrt' },
+      { type: 'EQUALS' },
+    ];
+    for (const action of ignored) {
+      expect(reduce(state, action)).toBe(state);
+    }
   });
 });
