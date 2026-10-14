@@ -89,6 +89,11 @@ func (c *Calculator) Calculate(op Op, operands ...float64) (float64, error) {
 	if len(operands) != o.arity {
 		return 0, fmt.Errorf("%w: %s takes %d, got %d", ErrArity, op, o.arity, len(operands))
 	}
+	for _, v := range operands {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("%w: %v", ErrInvalidOperand, v)
+		}
+	}
 	res, err := o.apply(operands)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", op, err)
@@ -98,6 +103,9 @@ func (c *Calculator) Calculate(op Op, operands ...float64) (float64, error) {
 		return 0, fmt.Errorf("%s: %w", op, ErrOverflow)
 	case math.IsNaN(res):
 		return 0, fmt.Errorf("%s: %w", op, ErrUndefinedResult)
+	}
+	if res == 0 {
+		return 0, nil // normalizes -0 (CALC-08)
 	}
 	return res, nil
 }

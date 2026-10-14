@@ -2,7 +2,9 @@ package calculator
 
 import (
 	"errors"
+	"fmt"
 	"math"
+	"sync"
 	"testing"
 )
 
@@ -171,4 +173,109 @@ func TestCalculate_Sqrt(t *testing.T) {
 	runErrCases(t, []errCase{
 		{"sqrt -1", OpSqrt, []float64{-1}, ErrNegativeSquareRoot},
 	})
+}
+
+// CALC-05, CALC-06
+func TestCalculate_Overflow(t *testing.T) {
+	t.Parallel()
+	runErrCases(t, []errCase{
+		{"multiply", OpMultiply, []float64{1e308, 10}, ErrOverflow},
+		{"add", OpAdd, []float64{math.MaxFloat64, math.MaxFloat64}, ErrOverflow},
+		{"subtract", OpSubtract, []float64{-math.MaxFloat64, math.MaxFloat64}, ErrOverflow},
+		{"divide", OpDivide, []float64{1e308, 1e-10}, ErrOverflow},
+		{"percentage intermediate", OpPercentage, []float64{1e308, 10}, ErrOverflow},
+	})
+}
+
+// CALC-07
+func TestCalculate_InvalidOperand(t *testing.T) {
+	t.Parallel()
+	c := New()
+	bad := map[string]float64{"NaN": math.NaN(), "+Inf": math.Inf(1), "-Inf": math.Inf(-1)}
+	for _, info := range c.Operations() {
+		for name, v := range bad {
+			for pos := 0; pos < info.Arity; pos++ {
+				in := make([]float64, info.Arity)
+				for i := range in {
+					in[i] = 1
+				}
+				in[pos] = v
+				t.Run(fmt.Sprintf("%s/%s/arg%d", info.Name, name, pos), func(t *testing.T) {
+					t.Parallel()
+					if _, err := c.Calculate(info.Name, in...); !errors.Is(err, ErrInvalidOperand) {
+						t.Fatalf("got %v, want ErrInvalidOperand", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+// CALC-08
+func TestCalculate_NegativeZeroNormalized(t *testing.T) {
+	t.Parallel()
+	c := New()
+	negZero := math.Copysign(0, -1)
+	for name, tc := range map[string]calcCase{
+		"multiply": {op: OpMultiply, in: []float64{-1, 0}},
+		"sqrt":     {op: OpSqrt, in: []float64{negZero}},
+		"divide":   {op: OpDivide, in: []float64{negZero, 5}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got, err := c.Calculate(tc.op, tc.in...)
+			if err != nil || got != 0 || math.Signbit(got) {
+				t.Fatalf("got (%v, %v), want +0", got, err)
+			}
+		})
+	}
+}
+
+// CALC-09
+func TestCalculate_UnknownOperation(t *testing.T) {
+	t.Parallel()
+	runErrCases(t, []errCase{{"modulo", Op("modulo"), []float64{1, 2}, ErrUnknownOperation}})
+}
+
+// CALC-09
+func TestCalculate_Arity(t *testing.T) {
+	t.Parallel()
+	runErrCases(t, []errCase{
+		{"binary with one", OpAdd, []float64{1}, ErrArity},
+		{"binary with three", OpAdd, []float64{1, 2, 3}, ErrArity},
+		{"unary with two", OpSqrt, []float64{4, 4}, ErrArity},
+		{"none", OpSqrt, nil, ErrArity},
+	})
+}
+
+// CALC-09: the earliest rule in the fixed order wins.
+func TestCalculate_ValidationOrder(t *testing.T) {
+	t.Parallel()
+	nan, inf := math.NaN(), math.Inf(1)
+	runErrCases(t, []errCase{
+		{"unknown beats arity and NaN", Op("nope"), []float64{nan}, ErrUnknownOperation},
+		{"arity beats NaN", OpAdd, []float64{nan}, ErrArity},
+		{"invalid operand beats division by zero", OpDivide, []float64{nan, 0}, ErrInvalidOperand},
+		{"invalid operand beats negative sqrt", OpSqrt, []float64{math.Inf(-1)}, ErrInvalidOperand},
+		{"0^negative is division by zero, not overflow", OpPower, []float64{0, -1}, ErrDivisionByZero},
+		{"infinite beats 0^negative", OpPower, []float64{0, -inf}, ErrInvalidOperand},
+	})
+}
+
+// SHOULD: Calculate is safe for concurrent use (meaningful under -race).
+func TestCalculate_Concurrent(t *testing.T) {
+	t.Parallel()
+	c := New()
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if got, err := c.Calculate(OpAdd, 1, 2); err != nil || got != 3 {
+				t.Errorf("got (%v, %v)", got, err)
+			}
+			_ = c.Operations()
+		}()
+	}
+	wg.Wait()
 }
