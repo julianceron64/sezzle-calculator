@@ -120,3 +120,56 @@ Finish with: the commit list, anything you could not apply and why, and the two 
 Then stop and wait.
 </pasted_content id="9a98">
 ~~~~
+
+### 2026-10-14T00:10:44Z
+
+~~~~text
+
+
+<pasted_content id="9a98">
+Proposals approved with the changes below. Apply them, then stop.
+
+1. Keep as proposed: API-14, FE-13, scripts/check-no-sleeps.sh, and the evidence-type table. Keep
+   order independence as review evidence (no -shuffle=on). Do not touch the Makefile or CI yet.
+
+2. API-14 (error precedence plus the unknown-field detector test): name the audit finding or my
+   decision (F2-F22) it comes from. If it traces to none, tell me instead of reverting it, and
+   wait for my answer on that point only.
+
+3. Rule 12 approved as proposed:
+   - ± and ⌫ right after a binary operator are no-ops.
+   - √ right after an operator evaluates on the displayed left operand (new request id, pending
+     operator kept, next digit starts fresh input).
+   - ± on a plain result becomes editing with the sign flipped (document the 12-significant-digit
+     loss); on an exponential result it is a no-op.
+   - ± on zero is a no-op (never a -0 input).
+   - nextId lives at the state root in every status. Amend rule 11: CLEAR resets to the initial
+     state EXCEPT nextId, which never resets. Add the late-response test (id 1, press C, id 2,
+     deliver the late response for 1, display unchanged).
+   - Add the tests for every case in the table.
+
+4. formatNumber approved with ONE change: exponential when abs >= 1e12 (not 1e15); keep abs < 1e-9.
+   - Update the algorithm, the table (1e12 -> 1e+12; 123456789012345 -> 1.23456789e+14), the
+     spec 003 threshold text and FE-04.
+   - Add explicit rounding-crossing cases and state the behavior: 999999999999.9 (rounds across
+     1e12), 999999999999999.9, and a value that rounds across 1e-9. Say whether the threshold is
+     decided on the raw or the rounded value, and test it.
+
+5. Record the Amendments in docs/DECISIONS.md, commit by file group (Conventional Commits, no push),
+   list the commits, and stop.
+</pasted_content id="9a98">
+~~~~
+
+### 2026-10-14T00:13:41Z
+
+~~~~text
+/implement-spec 001
+~~~~
+
+### 2026-10-14T00:16:37Z
+
+~~~~text
+Plan approved. Proceed with TDD as defined in CLAUDE.md: one failing test first, minimal code,
+refactor, one Conventional Commit per green increment. If you hit an ambiguity or an AC you cannot
+meet as written, stop and ask instead of choosing. Finish with make check and the final report.
+~~~~
