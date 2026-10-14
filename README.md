@@ -42,9 +42,10 @@ make smoke
 docker stop sezzle-calculator
 ```
 
-Open <http://localhost:8080> for the calculator. The image is about 16 MB, runs as a non-root user, and
-`docker ps` shows it as `healthy` after the first health check (the interval is 10 s). To use another host port: `make docker-run PORT=9090`, then
-`make smoke BASE_URL=http://localhost:9090`.
+Open <http://localhost:8080> for the calculator. The image is about 16 MB on disk (3.7 MB compressed), runs as a
+non-root user, and `docker ps` shows it as `healthy` after the first health check (the interval is 10 s). The
+captured output is in [`docs/VERIFICATION.md`](docs/VERIFICATION.md). To use another host port:
+`make docker-run PORT=9090`, then `make smoke BASE_URL=http://localhost:9090`.
 
 ## Local development
 
@@ -255,7 +256,9 @@ make check       # lint + coverage: the full quality gate, and what CI runs
   with file and test shuffling both pass. `make test` itself does not shuffle.
 
 **CI** (`.github/workflows/ci.yml`) runs the same `make` targets, in parallel backend and frontend jobs, and uploads
-`coverage/` and `frontend/coverage/` as artifacts.
+`coverage/` and `frontend/coverage/` as artifacts. A third `docker` job runs after both: it builds the image
+(`make docker-build`), starts the container, waits for `/healthz`, and runs `make smoke` against it; if a step fails it
+prints the container's logs.
 
 ## Design decisions
 
