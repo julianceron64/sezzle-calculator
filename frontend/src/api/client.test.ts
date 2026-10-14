@@ -212,8 +212,21 @@ describe('calculate: configuration', () => {
     expect(timeout).toHaveBeenCalledWith(5000);
   });
 
-  it('is same-origin when VITE_API_BASE_URL is not set', async () => {
+  it('is same-origin when VITE_API_BASE_URL is empty', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        Response.json({ operation: 'add', a: 1, b: 2, result: 3 }),
+      );
+    await calculate('add', [1, 2]);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/v1/add');
+  });
+
+  // The production default: the variable does not exist at all (`?? ''`).
+  it('is same-origin when VITE_API_BASE_URL is not set at all', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', undefined);
+    expect(import.meta.env.VITE_API_BASE_URL).toBeUndefined();
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(
