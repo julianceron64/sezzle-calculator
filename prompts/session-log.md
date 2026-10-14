@@ -475,3 +475,15 @@ mark spec 003 done in specs/README.md. No push. Give me the commit list and stop
 ~~~~text
 go
 ~~~~
+
+### 2026-10-14T01:36:22Z
+
+~~~~text
+/implement-spec 004
+~~~~
+
+### 2026-10-14T01:38:39Z
+
+~~~~text
+approve, all recommended
+~~~~
