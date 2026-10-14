@@ -143,7 +143,9 @@ digits into request operands, and every number on screen after an operation come
   stays active. Errors show `Error` on the display and a message below it, chosen by the backend's error `code`.
 - Results are displayed with 12 significant digits (`0.1 + 0.2` shows `0.3`) and switch to exponential notation at
   `1e12` and above or below `1e-9`. The full-precision value is what is sent in the next request.
-- Input is limited to 15 digits. The frontend validates input format only; rules such as division by zero come from
+- Input is limited to 15 digits, and every digit counts, including the leading `0` of `0.5`. So a number typed as
+  `0.xxx` holds at most 14 fractional digits, while `1.xxx` holds 14 as well and `123.xxx` holds 12. The sign and the
+  decimal point are not counted. The frontend validates input format only; rules such as division by zero come from
   the backend.
 
 **Assumption:** `±` on a result turns it into editable input holding the *12-digit display string*, so
@@ -166,6 +168,19 @@ exponential string is not valid input). `±` on a zero or on a number right afte
 
 Keys are ignored while Ctrl, Alt or Meta is held (Shift is allowed, since `+`, `*`, `^` and `%` need it on many
 layouts). Handled keys call `preventDefault()`, so `Enter` on a focused button does not also click it.
+
+### Test environment notes
+
+- **jsdom + MSW + abort signals (verified):** `AbortSignal.any`, `AbortSignal.timeout` and MSW's `fetch` interception all
+  work under jsdom with the pinned versions (Vitest 5, jsdom 29, MSW 3, Node 22). `src/test/setup.ts` therefore does
+  not restore Node's `AbortController`/`AbortSignal`, which ADR-008 allowed only if they had broken MSW.
+- Node's `fetch` cannot resolve relative URLs, so tests set `VITE_API_BASE_URL=http://api.test` (`test.env` in
+  `vite.config.ts`) and MSW intercepts that origin. The same-origin default is covered by its own test.
+- MSW 3 renamed the unhandled-request option to `onUnhandledFrame`; the setup uses `'error'`, so any request without a
+  handler fails the test.
+- The real client rejects as soon as the hook aborts, so a late response can never reach the hook through it. The
+  reducer's request-id guard is therefore proven in `Calculator.stale.test.tsx`, which swaps in a fake `calculate`
+  that ignores the abort signal.
 
 ## Testing & coverage
 
