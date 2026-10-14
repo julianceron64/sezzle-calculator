@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import type { OperationName } from '../../../api/types';
+import { OPERATION_NAMES, type OperationName } from '../../../api/types';
 import { apiUrl, server } from '../../../test/msw';
 import { Calculator } from './Calculator';
 
@@ -22,17 +22,29 @@ const NAMES = {
   '=': 'equals',
 } as const;
 
+const isSymbolKey = (label: string): label is keyof typeof NAMES =>
+  label in NAMES;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
 type CalcRequest = { operation: OperationName; body: unknown };
 
 /** Mocks operations with fixed results and records requests in order. */
 function mockResults(results: Partial<Record<OperationName, number>>) {
   const requests: CalcRequest[] = [];
-  for (const [operation, result] of Object.entries(results)) {
+  for (const operation of OPERATION_NAMES) {
+    const result = results[operation];
+    if (result === undefined) continue;
     server.use(
       http.post(apiUrl(operation), async ({ request }) => {
         const body: unknown = await request.json();
-        requests.push({ operation: operation as OperationName, body });
-        return HttpResponse.json({ operation, result, ...(body as object) });
+        requests.push({ operation, body });
+        return HttpResponse.json({
+          operation,
+          result,
+          ...(isRecord(body) ? body : {}),
+        });
       }),
     );
   }
@@ -55,7 +67,7 @@ function setup(props: { timeoutMs?: number } = {}) {
   render(<Calculator {...props} />);
   const key = (label: string) =>
     screen.getByRole('button', {
-      name: label in NAMES ? NAMES[label as keyof typeof NAMES] : label,
+      name: isSymbolKey(label) ? NAMES[label] : label,
     });
   /** Clicks keys by label, e.g. click('1', '2', '+', '3', '='). */
   const click = async (...labels: string[]) => {

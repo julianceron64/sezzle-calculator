@@ -11,10 +11,12 @@ const BINARY: Record<string, BinaryOp> = {
   '%': 'percentage',
 };
 
+const isDigit = (key: string): key is Digit => /^[0-9]$/.test(key);
+
 /** Turns a key string such as "12+3=" into actions (spaces are ignored). */
 function actionsFor(keys: string): Action[] {
   return [...keys.replace(/ /g, '')].map((key): Action => {
-    if (/^[0-9]$/.test(key)) return { type: 'DIGIT', digit: key as Digit };
+    if (isDigit(key)) return { type: 'DIGIT', digit: key };
     const op = BINARY[key];
     if (op) return { type: 'BINARY_OP', op };
     switch (key) {
