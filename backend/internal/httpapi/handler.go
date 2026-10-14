@@ -37,17 +37,21 @@ func NewHandler(calc Calculator, logger *slog.Logger, opts ...Option) http.Handl
 	apiMux.HandleFunc("GET /api/v1/operations", a.operations)
 	apiMux.HandleFunc("/api/", a.apiFallback)
 
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	root := http.NewServeMux()
 	root.HandleFunc("/healthz", a.health)
 	root.Handle("/api/", noStore(apiMux))
-	root.HandleFunc("/", http.NotFound)
+	if o.staticDir != "" {
+		root.Handle("/", staticHandler(o.staticDir))
+	} else {
+		root.HandleFunc("/", http.NotFound)
+	}
 	return requestID(accessLog(logger, recoverer(logger, root)))
 }
-
-// Option configures NewHandler.
-type Option func(*options)
-
-type options struct{}
 
 func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
