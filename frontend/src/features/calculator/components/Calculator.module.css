@@ -1,0 +1,19 @@
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.title {
+  /* Visually hidden: the page needs a heading, the card needs no title bar. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
