@@ -18,7 +18,7 @@ Spec-driven workflow: the human writes specs and ADRs; Claude Code implements th
 | 002 | [Backend — HTTP API & server](002-backend-http-api.md) | 001 | Done |
 | 003 | [Frontend — calculator app](003-frontend-calculator.md) | 002 (contract only) | Done |
 | 004 | [Quality — tests, coverage, lint, CI](004-quality.md) | 001–003 | Done |
-| 005 | [Delivery — Docker, README, prompts](005-delivery.md) | 001–004 | Todo |
+| 005 | [Delivery — Docker, README, prompts](005-delivery.md) | 001–004 | Done |
 
 ## Conventions
 
