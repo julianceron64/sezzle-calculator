@@ -50,7 +50,7 @@ Files below 100 %:
 |---|---|---|
 | `src/App.tsx` | 0 % | Three-line wrapper around `<Calculator />`; the component is covered through its own tests |
 | `src/lib/assertNever.ts` | 0 % | The exhaustiveness helper; it throws only if a `never` check is violated, so tests do not reach it |
-| `src/features/calculator/model/reducer.ts` | 90.7 % | The three `assertNever` defaults of its exhaustive switches, and one branch of the error check in `getExpression` |
+| `src/features/calculator/model/reducer.ts` | 90.7 % (88 of 97 lines) | The nine `return assertNever(...)` defaults of its nine exhaustive `switch` statements, which are unreachable by design. They are also its only uncovered branches (98 of 107 covered); every other line and branch is covered. |
 
 `src/main.tsx`, `src/test/**` and `*.d.ts` are excluded from coverage by configuration.
 
