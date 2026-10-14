@@ -42,8 +42,7 @@ jobs:
         working-directory: frontend
       - run: make lint-frontend
       - run: make coverage-frontend
-      - run: npm run build
-        working-directory: frontend
+      - run: make build-frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:

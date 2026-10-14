@@ -6,7 +6,7 @@ PORT     ?= 8080
 .DEFAULT_GOAL := help
 .PHONY: help dev-backend dev-frontend test test-backend test-frontend \
         coverage coverage-backend coverage-frontend lint lint-backend lint-frontend \
-        check docker-build docker-run smoke clean
+        check build-frontend docker-build docker-run smoke clean
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n",$$1,$$2}'
@@ -48,6 +48,9 @@ lint-frontend: ## eslint + tsc + no fixed sleeps in frontend tests
 lint: lint-backend lint-frontend ## All linters
 
 check: lint coverage ## Full quality gate (what CI runs)
+
+build-frontend: ## Production build of the SPA (type-checks first)
+	cd $(FRONTEND) && npm run build
 
 docker-build: ## Build the full-stack image
 	docker build -t $(IMAGE) .
