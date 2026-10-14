@@ -36,12 +36,14 @@ coverage-frontend: ## Vitest coverage + thresholds
 
 coverage: coverage-backend coverage-frontend ## All coverage reports
 
-lint-backend: ## gofmt + go vet
+lint-backend: ## gofmt + go vet + no fixed sleeps in Go tests
 	@out="$$(gofmt -l $(BACKEND))"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	cd $(BACKEND) && go vet ./...
+	./scripts/check-no-sleeps.sh backend
 
-lint-frontend: ## eslint + tsc
+lint-frontend: ## eslint + tsc + no fixed sleeps in frontend tests
 	cd $(FRONTEND) && npm run lint && npm run typecheck
+	./scripts/check-no-sleeps.sh frontend
 
 lint: lint-backend lint-frontend ## All linters
 
