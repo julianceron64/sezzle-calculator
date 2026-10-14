@@ -1,24 +1,60 @@
 # Sezzle Calculator
 
-Full-stack calculator: **React + TypeScript** frontend consuming a **Go** REST microservice.
+Full-stack calculator: a **React + TypeScript** frontend consuming a **Go** REST microservice. Seven operations
+(`add`, `subtract`, `multiply`, `divide`, `power`, `sqrt`, `percentage`), a pocket-calculator UI with full keyboard
+support, and one small container that serves both.
 
-> Sections marked `TODO(spec-00X)` are completed as each spec is implemented.
+```text
+Browser ── React SPA ──────────────── POST /api/v1/{operation} (JSON) ──▶ Go server (net/http, stdlib only)
+           pure reducer, never                                           ├─ httpapi     transport, problem+json errors
+           computes a result                                             ├─ calculator  pure arithmetic domain
+                                                                         └─ serves the built SPA (same origin, no CORS)
+```
+
+The backend is the single source of truth for every result; the frontend only formats input and displays what the API
+returns.
+
+```text
+backend/    Go module: cmd/server (composition root), internal/{calculator,httpapi,config}
+frontend/   Vite + React + TypeScript: src/api, src/features/calculator, src/lib
+specs/      numbered specs with acceptance criteria       docs/DECISIONS.md   architecture decisions (ADRs)
+scripts/    coverage gate, no-sleeps check, smoke test    prompts/            prompts used to build this
+```
 
 ## Quick start (Docker)
 
+Prerequisites: Docker and make. `make docker-run` runs in the foreground, so use two terminals:
+
 ```bash
-make docker-build && make docker-run   # UI + API on http://localhost:8080
-make smoke                             # end-to-end smoke test with curl
+# terminal 1: build the image and run it (UI + API on http://localhost:8080)
+make docker-build && make docker-run
+
+# terminal 2: end-to-end smoke test with curl (11 checks)
+make smoke
 ```
+
+Detached equivalent, in one terminal:
+
+```bash
+make docker-build
+docker run -d --rm -p 8080:8080 --name sezzle-calculator sezzle-calculator:local
+make smoke
+docker stop sezzle-calculator
+```
+
+Open <http://localhost:8080> for the calculator. The image is about 16 MB, runs as a non-root user, and
+`docker ps` shows it as `healthy` after the first health check (the interval is 10 s). To use another host port: `make docker-run PORT=9090`, then
+`make smoke BASE_URL=http://localhost:9090`.
 
 ## Local development
 
 Prerequisites: Go ≥ 1.24, Node ≥ 22, make.
 
 ```bash
-make dev-backend    # API on :8080
-make dev-frontend   # UI on :5173 (proxies /api → :8080)
-make check          # lint + typecheck + tests + coverage gates
+cd frontend && npm ci   # once
+make dev-backend        # API on :8080
+make dev-frontend       # UI on :5173 (proxies /api → :8080)
+make check              # lint + typecheck + tests + coverage gates
 ```
 
 ## API
@@ -233,14 +269,71 @@ Full rationale in [`docs/DECISIONS.md`](docs/DECISIONS.md). Highlights:
 
 ## Assumptions
 
-<!-- TODO(spec-005) -->
+The assignment leaves these open; each is a decision recorded in [`docs/DECISIONS.md`](docs/DECISIONS.md) or in the
+spec it comes from.
+
+**Arithmetic and API**
+
+- Numbers are IEEE-754 `float64` end to end, so `POST /add {0.1, 0.2}` returns `0.30000000000000004`; the UI displays
+  `0.3`. Inputs must be finite, `±Inf` and `NaN` results are errors, and `-0` is returned as `0`.
+- `percentage(a, b)` means "`a` percent of `b`" and is computed literally as `a*b/100`. An intermediate overflow is an
+  error even when the true result fits (`percentage(1e308, 10)`).
+- `0⁰ = 1`, `0` to a negative power is a division by zero, and `(−8)^(1/3)` is undefined (there are no complex numbers).
+- Operands are JSON numbers only (`"2"` is rejected). Bodies are limited to 4 KiB, unknown fields are rejected, and
+  sending `b` to a unary operation is an error (even `null`).
+- `POST` to an unknown operation is `UNKNOWN_OPERATION`; any other unmatched `/api/` route, including `GET` on an
+  unknown operation, is `NOT_FOUND`.
+- No auth, rate limiting or CORS: the UI and API share one origin.
+
+**Calculator behaviour**
+
+- Immediate execution, left to right, no precedence (`2 + 3 × 4 = 20`). `=` with no new operand does nothing; there is
+  no "repeat last operation".
+- Input is limited to 15 digits and every digit counts, including the leading `0` of `0.5`.
+- Results are shown with 12 significant digits, in exponential notation at `1e12` and above or below `1e-9`. The
+  full-precision value is kept for the next operation.
+- `±` on a result is lossy: it edits the displayed 12-digit string (`0.30000000000000004` becomes `-0.3`).
+- Keyboard shortcuts work with Shift held (`+`, `*`, `^` and `%` need it on many layouts); Ctrl, Alt and Meta
+  combinations are left to the browser.
+
+**Operations**
+
+- `STATIC_DIR` is not validated at startup: a wrong path serves 404s instead of failing fast.
+- The Docker `HEALTHCHECK` runs every 10 s (the Dockerfile sets this explicitly).
+
+**Known limits**
+
+- A request target that is not valid HTTP, such as `GET /api/v1/%zz`, is rejected by Go's `net/http` with a `400`
+  `text/plain` before any handler runs, so it cannot be a problem+json.
+- The layout and dark mode were built from the CSS and the component tests; I have not reviewed them on a real
+  phone or in several browsers.
 
 ## How this was built (AI usage)
 
-Spec-driven development with Claude Code: I wrote the specs (`specs/`) and ADRs (`docs/DECISIONS.md`);
-Claude Code implemented them one spec at a time under the rules in `CLAUDE.md`.
-Every prompt is in [`prompts/`](prompts/).
+Spec-driven development with Claude Code. I wrote the specs ([`specs/`](specs/)) and the ADRs
+([`docs/DECISIONS.md`](docs/DECISIONS.md)); Claude Code implemented them one spec at a time under the rules in
+[`CLAUDE.md`](CLAUDE.md):
+
+1. `/implement-spec 00X` produced a plan with an AC-to-test table. **No code was written until I approved the plan.**
+2. Code followed in small TDD increments, one Conventional Commit each, and `make check` had to pass.
+3. After a spec, a read-only `spec-reviewer` subagent audits it against its ACs and the ADRs (`/review 00X`), and I
+   choose which findings to fix.
+4. Evidence for each AC is a test, a command or a review, and is listed in the final report of each spec.
+
+Where Claude's first attempt was wrong or incomplete, the correction is recorded rather than hidden: see
+[`prompts/PROMPTS.md`](prompts/PROMPTS.md) for the curated prompts and corrections, and
+[`prompts/session-log.md`](prompts/session-log.md) for every prompt verbatim.
 
 ## What I'd do next
 
-<!-- TODO(spec-005) -->
+- **Run CI for real.** The workflow (including the Docker and smoke job) has not run on GitHub yet; the first push is
+  the real test of it.
+- **Look at the UI on real devices** and in other browsers, and add a browser end-to-end suite (for example
+  Playwright) on top of the smoke test.
+- **Expression input** with precedence and parentheses. It needs a parser and a new API contract, so it would start
+  with an ADR.
+- **Exact decimal arithmetic** (`math/big` or a decimal type) so `0.1 + 0.2` is exactly `0.3`; ADR-006 records why
+  float64 was chosen for now.
+- **History and memory keys**, a theme toggle, and localisation (decimal comma).
+- **Operability:** a metrics endpoint, rate limiting, OpenAPI generation, fail-fast validation of `STATIC_DIR`, and a
+  time-boxed fuzz run in CI.
