@@ -184,7 +184,42 @@ layouts). Handled keys call `preventDefault()`, so `Enter` on a focused button d
 
 ## Testing & coverage
 
-<!-- TODO(spec-004): how to run, gates, link to docs/COVERAGE.md -->
+```bash
+make test        # go test -race -count=1 ./...  +  vitest run
+make coverage    # backend + frontend coverage reports, with the gates below
+make lint        # gofmt, go vet, eslint (--max-warnings=0), tsc --noEmit, no-fixed-sleeps check
+make check       # lint + coverage: the full quality gate, and what CI runs
+```
+
+`make check` needs `cd frontend && npm ci` once. Reports: `coverage/backend.html` and `frontend/coverage/index.html`
+(plus `lcov.info`); the latest numbers are in [`docs/COVERAGE.md`](docs/COVERAGE.md).
+
+**Gates (the build fails below them):**
+
+| Scope | Gate |
+|---|---|
+| Backend `./internal/...` | ≥ 90 % statements (`scripts/check-go-coverage.sh`) |
+| Frontend | ≥ 85 % lines, statements and functions; ≥ 80 % branches (Vitest `thresholds`) |
+
+`cmd/server` is tested but not counted in the backend gate; `docs/COVERAGE.md` reports it separately.
+
+**What is tested, and how** (ADR-012):
+
+- **Backend:** table-driven domain tests, `httptest` handler tests for every status and error code, a fake `Calculator`
+  to prove error mapping, a fuzz test on the request decoder (`FuzzCalculateHandler`; the seed corpus runs in every
+  `go test`, run it for real with `go test -fuzz=FuzzCalculateHandler ./internal/httpapi`), and `run` tested on a free
+  port.
+- **Frontend:** pure reducer unit tests, the API client against MSW, `formatNumber` tables, and component integration
+  tests driven by `user-event` (clicks and keyboard). There is no browser E2E suite; `scripts/smoke.sh` covers the
+  running container instead.
+- **No fixed sleeps:** `scripts/check-no-sleeps.sh` (part of `make lint`) fails on `time.Sleep` in Go tests and
+  `setTimeout` in frontend tests. Tests wait on events instead: a ticker with a deadline for server readiness,
+  `waitFor` / `findBy*` in the UI.
+- **No order dependence:** tests do not rely on execution order. `go test -race -shuffle=on -count=3 ./...` and Vitest
+  with file and test shuffling both pass. `make test` itself does not shuffle.
+
+**CI** (`.github/workflows/ci.yml`) runs the same `make` targets, in parallel backend and frontend jobs, and uploads
+`coverage/` and `frontend/coverage/` as artifacts.
 
 ## Design decisions
 
