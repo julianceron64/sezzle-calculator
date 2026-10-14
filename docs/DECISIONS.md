@@ -71,6 +71,10 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
 - **Alternatives**: `math/big` / decimal library — rejected: third-party dep or awkward `sqrt`/`pow`,
   irrationals can't be exact anyway, out of scope for a 2–4 h exercise.
 - **Consequences**: `POST /add {0.1, 0.2}` returns `0.30000000000000004`; the UI shows `0.3`. Documented in README.
+- **Amendment 2026-10-13 — display formatting**: 12 significant digits in plain notation; exponential (10 significant
+  digits, trimmed) when the 12-digit-rounded exponent is `>= 12` (i.e. `>= 1e12`) or `< -9` (i.e. `< 1e-9`). The threshold is
+  decided on the **rounded** value, so a plain display never shows a value that rounds to `>= 1e12` (`999999999999.9` →
+  `1e+12`). Formatting is string-based from `toExponential`, never `toPrecision` (spec 003, FE-04).
 
 ## ADR-007 — Operation semantics (assumptions)
 
@@ -115,6 +119,11 @@ Format: **Context → Decision → Alternatives considered → Consequences**. S
   contract; scope creep. Two-input form — rejected: less intuitive, doesn't feel like a calculator.
 - **Consequences**: state machine in a pure reducer; effects described as data (`status: "evaluating"` +
   request), executed by the hook; stale responses ignored via request id; `C` aborts in-flight requests.
+- **Amendment 2026-10-13 — undefined key sequences (rule 12)**: `±` and `⌫` right after a binary operator are no-ops;
+  `√` there evaluates on the displayed left operand; `±` on a plain result becomes editable input with the sign flipped
+  (lossy to 12 significant digits), on an exponential result or on zero it is a no-op (never a `-0` input). The request id
+  is a counter `nextId` at the state root in every status, and `CLEAR` resets everything except `nextId`, so a late
+  response can never match a later request.
 - **Amendment 2026-10-13 — keyboard and busy state**: the window keydown handler calls `preventDefault()` for every key the
   keymap handles. While `evaluating`, keys use `aria-disabled` and the reducer ignores their actions (no native `disabled`,
   focus is kept); `C` is always enabled. Accessible names are fixed in spec 003.
