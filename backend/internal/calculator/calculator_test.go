@@ -236,12 +236,20 @@ func TestCalculate_NegativeZeroNormalized(t *testing.T) {
 	t.Parallel()
 	c := New()
 	negZero := math.Copysign(0, -1)
-	for name, tc := range map[string]calcCase{
-		"multiply": {op: OpMultiply, in: []float64{-1, 0}},
-		"sqrt":     {op: OpSqrt, in: []float64{negZero}},
-		"divide":   {op: OpDivide, in: []float64{negZero, 5}},
-	} {
-		t.Run(name, func(t *testing.T) {
+	tests := []struct {
+		name string
+		op   Op
+		in   []float64
+	}{
+		{"multiply", OpMultiply, []float64{-1, 0}},
+		{"sqrt", OpSqrt, []float64{negZero}},
+		{"divide", OpDivide, []float64{negZero, 5}},
+		{"add -0 + -0", OpAdd, []float64{negZero, negZero}},
+		{"subtract -0 - 0", OpSubtract, []float64{negZero, 0}},
+		{"power (-0)^3", OpPower, []float64{negZero, 3}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := c.Calculate(tc.op, tc.in...)
 			if err != nil || got != 0 || math.Signbit(got) {
