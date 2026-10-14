@@ -8,28 +8,48 @@ import (
 	"testing"
 )
 
-// approxEqual implements the comparison policy of CALC-11: exact equality when
-// want is exactly representable (callers pass exact values), otherwise a
-// relative tolerance of 1e-12 with a floor of 1.
-func approxEqual(got, want float64) bool {
+// matches implements the comparison policy of CALC-11: exact equality, unless
+// approx is set (for results that are not exactly representable), in which
+// case a relative tolerance of 1e-12 with a floor of 1 applies.
+func matches(got, want float64, approx bool) bool {
 	if got == want {
 		return true
 	}
-	return math.Abs(got-want) <= 1e-12*math.Max(1, math.Abs(want))
+	return approx && math.Abs(got-want) <= 1e-12*math.Max(1, math.Abs(want))
 }
 
-func TestApproxEqual(t *testing.T) {
+func TestMatches(t *testing.T) {
 	t.Parallel()
-	if !approxEqual(0.5, 0.5) || !approxEqual(1e9+1e-4, 1e9) || approxEqual(1, 1.001) || approxEqual(0, 1e-11) {
-		t.Fatal("approxEqual does not follow CALC-11")
+	tests := []struct {
+		name      string
+		got, want float64
+		approx    bool
+		ok        bool
+	}{
+		{"exact equal", 5, 5, false, true},
+		{"exact rejects near miss", 5.000000000001, 5, false, false},
+		{"exact rejects tiny miss", 1024.0000000001, 1024, false, false},
+		{"approx accepts within tolerance", 0.30000000000000004, 0.3, true, true},
+		{"approx accepts relative on large", 1e9 + 1e-4, 1e9, true, true},
+		{"approx rejects outside tolerance", 1, 1.001, true, false},
+		{"approx floor of 1 near zero", 0, 1e-11, true, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := matches(tc.got, tc.want, tc.approx); got != tc.ok {
+				t.Fatalf("matches(%v, %v, %v) = %v, want %v", tc.got, tc.want, tc.approx, got, tc.ok)
+			}
+		})
 	}
 }
 
 type calcCase struct {
-	name string
-	op   Op
-	in   []float64
-	want float64
+	name   string
+	op     Op
+	in     []float64
+	want   float64
+	approx bool // false (default): exact equality (CALC-11)
 }
 
 func runCases(t *testing.T, cases []calcCase) {
@@ -42,7 +62,7 @@ func runCases(t *testing.T, cases []calcCase) {
 			if err != nil {
 				t.Fatalf("Calculate(%s, %v) error: %v", tc.op, tc.in, err)
 			}
-			if !approxEqual(got, tc.want) {
+			if !matches(got, tc.want, tc.approx) {
 				t.Fatalf("Calculate(%s, %v) = %v, want %v", tc.op, tc.in, got, tc.want)
 			}
 		})
@@ -53,22 +73,22 @@ func runCases(t *testing.T, cases []calcCase) {
 func TestCalculate_Basic(t *testing.T) {
 	t.Parallel()
 	runCases(t, []calcCase{
-		{"add positive", OpAdd, []float64{2, 3}, 5},
-		{"add negative", OpAdd, []float64{-2, -3}, -5},
-		{"add zero", OpAdd, []float64{0, 7}, 7},
-		{"add fractional", OpAdd, []float64{0.1, 0.2}, 0.3},
-		{"subtract positive", OpSubtract, []float64{5, 3}, 2},
-		{"subtract negative", OpSubtract, []float64{-5, -3}, -2},
-		{"subtract zero", OpSubtract, []float64{0, 4}, -4},
-		{"subtract fractional", OpSubtract, []float64{1.5, 0.25}, 1.25},
-		{"multiply positive", OpMultiply, []float64{4, 3}, 12},
-		{"multiply negative", OpMultiply, []float64{-4, 3}, -12},
-		{"multiply zero", OpMultiply, []float64{0, 9}, 0},
-		{"multiply fractional", OpMultiply, []float64{0.5, 0.5}, 0.25},
-		{"divide positive", OpDivide, []float64{12, 4}, 3},
-		{"divide negative", OpDivide, []float64{-12, 4}, -3},
-		{"divide zero numerator", OpDivide, []float64{0, 4}, 0},
-		{"divide fractional", OpDivide, []float64{1, 3}, 1.0 / 3},
+		{"add positive", OpAdd, []float64{2, 3}, 5, false},
+		{"add negative", OpAdd, []float64{-2, -3}, -5, false},
+		{"add zero", OpAdd, []float64{0, 7}, 7, false},
+		{"add fractional", OpAdd, []float64{0.1, 0.2}, 0.3, true},
+		{"subtract positive", OpSubtract, []float64{5, 3}, 2, false},
+		{"subtract negative", OpSubtract, []float64{-5, -3}, -2, false},
+		{"subtract zero", OpSubtract, []float64{0, 4}, -4, false},
+		{"subtract fractional", OpSubtract, []float64{1.5, 0.25}, 1.25, false},
+		{"multiply positive", OpMultiply, []float64{4, 3}, 12, false},
+		{"multiply negative", OpMultiply, []float64{-4, 3}, -12, false},
+		{"multiply zero", OpMultiply, []float64{0, 9}, 0, false},
+		{"multiply fractional", OpMultiply, []float64{0.5, 0.5}, 0.25, false},
+		{"divide positive", OpDivide, []float64{12, 4}, 3, false},
+		{"divide negative", OpDivide, []float64{-12, 4}, -3, false},
+		{"divide zero numerator", OpDivide, []float64{0, 4}, 0, false},
+		{"divide fractional", OpDivide, []float64{1, 3}, 1.0 / 3, true},
 	})
 }
 
@@ -76,10 +96,10 @@ func TestCalculate_Basic(t *testing.T) {
 func TestCalculate_Percentage(t *testing.T) {
 	t.Parallel()
 	runCases(t, []calcCase{
-		{"20 percent of 150", OpPercentage, []float64{20, 150}, 30},
-		{"150 percent of 20", OpPercentage, []float64{150, 20}, 30},
-		{"zero", OpPercentage, []float64{0, 99}, 0},
-		{"negative", OpPercentage, []float64{-10, 50}, -5},
+		{"20 percent of 150", OpPercentage, []float64{20, 150}, 30, false},
+		{"150 percent of 20", OpPercentage, []float64{150, 20}, 30, false},
+		{"zero", OpPercentage, []float64{0, 99}, 0, false},
+		{"negative", OpPercentage, []float64{-10, 50}, -5, false},
 	})
 }
 
@@ -148,11 +168,11 @@ func TestCalculate_DivideByZero(t *testing.T) {
 func TestCalculate_Power(t *testing.T) {
 	t.Parallel()
 	runCases(t, []calcCase{
-		{"2^10", OpPower, []float64{2, 10}, 1024},
-		{"2^-1", OpPower, []float64{2, -1}, 0.5},
-		{"5^0", OpPower, []float64{5, 0}, 1},
-		{"0^0", OpPower, []float64{0, 0}, 1},
-		{"4^0.5", OpPower, []float64{4, 0.5}, 2},
+		{"2^10", OpPower, []float64{2, 10}, 1024, false},
+		{"2^-1", OpPower, []float64{2, -1}, 0.5, false},
+		{"5^0", OpPower, []float64{5, 0}, 1, false},
+		{"0^0", OpPower, []float64{0, 0}, 1, false},
+		{"4^0.5", OpPower, []float64{4, 0.5}, 2, false},
 	})
 	runErrCases(t, []errCase{
 		{"0^-1", OpPower, []float64{0, -1}, ErrDivisionByZero},
@@ -166,9 +186,9 @@ func TestCalculate_Power(t *testing.T) {
 func TestCalculate_Sqrt(t *testing.T) {
 	t.Parallel()
 	runCases(t, []calcCase{
-		{"sqrt 9", OpSqrt, []float64{9}, 3},
-		{"sqrt 0", OpSqrt, []float64{0}, 0},
-		{"sqrt 2", OpSqrt, []float64{2}, 1.4142135623730951},
+		{"sqrt 9", OpSqrt, []float64{9}, 3, false},
+		{"sqrt 0", OpSqrt, []float64{0}, 0, false},
+		{"sqrt 2", OpSqrt, []float64{2}, 1.4142135623730951, true},
 	})
 	runErrCases(t, []errCase{
 		{"sqrt -1", OpSqrt, []float64{-1}, ErrNegativeSquareRoot},
@@ -278,4 +298,10 @@ func TestCalculate_Concurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// ADR-006: underflow is not an error; 1e-328 is below the smallest subnormal, so the result is 0.
+func TestCalculate_Underflow(t *testing.T) {
+	t.Parallel()
+	runCases(t, []calcCase{{"divide", OpDivide, []float64{1e-308, 1e20}, 0, false}})
 }
