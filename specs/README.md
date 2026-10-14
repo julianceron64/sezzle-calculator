@@ -14,7 +14,7 @@ Spec-driven workflow: the human writes specs and ADRs; Claude Code implements th
 
 | # | Spec | Depends on | Status |
 |---|---|---|---|
-| 001 | [Backend — calculator domain](001-backend-domain.md) | — | Todo |
+| 001 | [Backend — calculator domain](001-backend-domain.md) | — | Done |
 | 002 | [Backend — HTTP API & server](002-backend-http-api.md) | 001 | Todo |
 | 003 | [Frontend — calculator app](003-frontend-calculator.md) | 002 (contract only) | Todo |
 | 004 | [Quality — tests, coverage, lint, CI](004-quality.md) | 001–003 | Todo |

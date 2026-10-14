@@ -31,7 +31,22 @@ make check          # lint + typecheck + tests + coverage gates
 
 ## Operation semantics
 
-<!-- TODO(spec-001): copy ADR-007 table -->
+| Operation | Arity | Semantics | Domain errors |
+|---|---|---|---|
+| `add` | 2 | a + b | overflow |
+| `subtract` | 2 | a − b | overflow |
+| `multiply` | 2 | a × b | overflow |
+| `divide` | 2 | a ÷ b | b = 0 (incl. 0/0, −0) |
+| `power` | 2 | aᵇ (`0⁰ = 1`, as `math.Pow`) | `0^negative` → division by zero; NaN (e.g. `(−8)^(1/3)`) → undefined; overflow |
+| `sqrt` | 1 | √a | a < 0 (no complex numbers) |
+| `percentage` | 2 | "a percent of b" = a × b ÷ 100 | overflow |
+
+- `percentage` is computed literally as `a*b/100`. An intermediate overflow returns `ErrOverflow` even when the true
+  result is representable (e.g. `percentage(1e308, 10)`).
+- Operands and results are `float64`; operands must be finite, results that are `±Inf` are overflow, `NaN` is
+  undefined, and `-0` is returned as `0`.
+- Validation order in `Calculate`: unknown operation → arity → finite operands → compute → result check.
+  `0^negative` is detected as division by zero before an `Inf` result can become overflow.
 
 ## Frontend
 
