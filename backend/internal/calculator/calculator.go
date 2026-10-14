@@ -47,6 +47,7 @@ type Calculator struct {
 	infos    []Info // declaration order
 }
 
+// New returns a Calculator with all seven operations registered.
 func New() *Calculator {
 	c := &Calculator{registry: map[Op]operation{}}
 	c.register(OpAdd, 2, func(o []float64) (float64, error) { return o[0] + o[1], nil })
@@ -81,6 +82,7 @@ func (c *Calculator) register(name Op, arity int, apply func([]float64) (float64
 	c.infos = append(c.infos, Info{Name: name, Arity: arity})
 }
 
+// Calculate evaluates op on operands. Errors wrap the package sentinels; use errors.Is.
 func (c *Calculator) Calculate(op Op, operands ...float64) (float64, error) {
 	o, ok := c.registry[op]
 	if !ok {
@@ -105,7 +107,7 @@ func (c *Calculator) Calculate(op Op, operands ...float64) (float64, error) {
 		return 0, fmt.Errorf("%s: %w", op, ErrUndefinedResult)
 	}
 	if res == 0 {
-		return 0, nil // normalizes -0 (CALC-08)
+		return 0, nil // +0, never -0
 	}
 	return res, nil
 }
