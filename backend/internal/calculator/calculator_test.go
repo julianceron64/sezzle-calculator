@@ -110,4 +110,65 @@ func TestOperations_ReturnsCopy(t *testing.T) {
 	}
 }
 
-var _ = errors.Is
+type errCase struct {
+	name string
+	op   Op
+	in   []float64
+	want error
+}
+
+func runErrCases(t *testing.T, cases []errCase) {
+	t.Helper()
+	c := New()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := c.Calculate(tc.op, tc.in...)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Calculate(%s, %v) = (%v, %v), want error %v", tc.op, tc.in, got, err, tc.want)
+			}
+		})
+	}
+}
+
+// CALC-02
+func TestCalculate_DivideByZero(t *testing.T) {
+	t.Parallel()
+	negZero := math.Copysign(0, -1)
+	runErrCases(t, []errCase{
+		{"1/0", OpDivide, []float64{1, 0}, ErrDivisionByZero},
+		{"1/-0", OpDivide, []float64{1, negZero}, ErrDivisionByZero},
+		{"0/0", OpDivide, []float64{0, 0}, ErrDivisionByZero},
+	})
+}
+
+// CALC-03
+func TestCalculate_Power(t *testing.T) {
+	t.Parallel()
+	runCases(t, []calcCase{
+		{"2^10", OpPower, []float64{2, 10}, 1024},
+		{"2^-1", OpPower, []float64{2, -1}, 0.5},
+		{"5^0", OpPower, []float64{5, 0}, 1},
+		{"0^0", OpPower, []float64{0, 0}, 1},
+		{"4^0.5", OpPower, []float64{4, 0.5}, 2},
+	})
+	runErrCases(t, []errCase{
+		{"0^-1", OpPower, []float64{0, -1}, ErrDivisionByZero},
+		{"-0^-1", OpPower, []float64{math.Copysign(0, -1), -1}, ErrDivisionByZero},
+		{"(-8)^(1/3)", OpPower, []float64{-8, 1.0 / 3}, ErrUndefinedResult},
+		{"10^400", OpPower, []float64{10, 400}, ErrOverflow},
+	})
+}
+
+// CALC-04
+func TestCalculate_Sqrt(t *testing.T) {
+	t.Parallel()
+	runCases(t, []calcCase{
+		{"sqrt 9", OpSqrt, []float64{9}, 3},
+		{"sqrt 0", OpSqrt, []float64{0}, 0},
+		{"sqrt 2", OpSqrt, []float64{2}, 1.4142135623730951},
+	})
+	runErrCases(t, []errCase{
+		{"sqrt -1", OpSqrt, []float64{-1}, ErrNegativeSquareRoot},
+	})
+}

@@ -52,9 +52,25 @@ func New() *Calculator {
 	c.register(OpAdd, 2, func(o []float64) (float64, error) { return o[0] + o[1], nil })
 	c.register(OpSubtract, 2, func(o []float64) (float64, error) { return o[0] - o[1], nil })
 	c.register(OpMultiply, 2, func(o []float64) (float64, error) { return o[0] * o[1], nil })
-	c.register(OpDivide, 2, func(o []float64) (float64, error) { return o[0] / o[1], nil })
-	c.register(OpPower, 2, func(o []float64) (float64, error) { return math.Pow(o[0], o[1]), nil })
-	c.register(OpSqrt, 1, func(o []float64) (float64, error) { return math.Sqrt(o[0]), nil })
+	c.register(OpDivide, 2, func(o []float64) (float64, error) {
+		if o[1] == 0 {
+			return 0, ErrDivisionByZero
+		}
+		return o[0] / o[1], nil
+	})
+	// 0^negative must be ErrDivisionByZero before the Inf result is seen as overflow.
+	c.register(OpPower, 2, func(o []float64) (float64, error) {
+		if o[0] == 0 && o[1] < 0 {
+			return 0, ErrDivisionByZero
+		}
+		return math.Pow(o[0], o[1]), nil
+	})
+	c.register(OpSqrt, 1, func(o []float64) (float64, error) {
+		if o[0] < 0 {
+			return 0, ErrNegativeSquareRoot
+		}
+		return math.Sqrt(o[0]), nil
+	})
 	// Literal a*b/100: an intermediate overflow is ErrOverflow (ADR-007).
 	c.register(OpPercentage, 2, func(o []float64) (float64, error) { return o[0] * o[1] / 100, nil })
 	return c
@@ -73,7 +89,17 @@ func (c *Calculator) Calculate(op Op, operands ...float64) (float64, error) {
 	if len(operands) != o.arity {
 		return 0, fmt.Errorf("%w: %s takes %d, got %d", ErrArity, op, o.arity, len(operands))
 	}
-	return o.apply(operands)
+	res, err := o.apply(operands)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+	switch {
+	case math.IsInf(res, 0):
+		return 0, fmt.Errorf("%s: %w", op, ErrOverflow)
+	case math.IsNaN(res):
+		return 0, fmt.Errorf("%s: %w", op, ErrUndefinedResult)
+	}
+	return res, nil
 }
 
 // Operations lists the supported operations in declaration order.
