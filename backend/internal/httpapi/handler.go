@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/julianceron64/sezzle-calculator/backend/internal/calculator"
@@ -50,7 +51,7 @@ func NewHandler(calc Calculator, logger *slog.Logger, opts ...Option) http.Handl
 	} else {
 		root.HandleFunc("/", http.NotFound)
 	}
-	return requestID(accessLog(logger, recoverer(logger, root)))
+	return requestID(accessLog(logger, recoverer(logger, canonicalAPI(root))))
 }
 
 func noStore(next http.Handler) http.Handler {
@@ -157,4 +158,19 @@ func (a *api) writeJSON(w http.ResponseWriter, r *http.Request, status int, v an
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
+}
+
+// canonicalAPI answers /api and any non-canonical path under /api/ (//, ., ..)
+// with a NOT_FOUND problem. Without it ServeMux would redirect these before
+// any handler runs, leaking a non-problem response (ADR-004).
+func canonicalAPI(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == "/api" || (strings.HasPrefix(p, "/api/") && path.Clean(p) != p) {
+			w.Header().Set("Cache-Control", "no-store")
+			writeProblem(w, newProblem(codeNotFound))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

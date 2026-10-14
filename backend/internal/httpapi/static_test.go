@@ -148,3 +148,14 @@ func TestStatic_MissingIndexIs404(t *testing.T) {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
 }
+
+// The /api guard must not swallow SPA routes that merely start with "api".
+func TestStatic_ApiLookalikePathsStillFallBack(t *testing.T) {
+	t.Parallel()
+	h := staticSite(t)
+	for _, path := range []string{"/apple", "/apis/docs"} {
+		if rec := do(h, "GET", path, "", ""); rec.Code != 200 || rec.Body.String() != indexHTML {
+			t.Errorf("GET %s = %d %q, want the SPA index", path, rec.Code, rec.Body.String())
+		}
+	}
+}

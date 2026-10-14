@@ -292,3 +292,34 @@ func TestCalculate_NonFiniteResultIs500(t *testing.T) {
 		})
 	}
 }
+
+// API-04: non-canonical /api paths get a problem, never a ServeMux redirect or text/html body.
+func TestRouting_NonCanonicalAPIPaths(t *testing.T) {
+	t.Parallel()
+	h := realHandler()
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{"bare /api", "GET", "/api"},
+		{"bare /api POST", "POST", "/api"},
+		{"double slash", "POST", "/api//v1/add"},
+		{"dot-dot segment", "POST", "/api/v1/../v1/add"},
+		{"dot segment", "GET", "/api/./x"},
+		{"trailing slash", "POST", "/api/v1/add/"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rec := do(h, tc.method, tc.path, jsonCT, `{"a":1,"b":2}`)
+			assertProblem(t, rec, 404, "NOT_FOUND")
+			if loc := rec.Header().Get("Location"); loc != "" {
+				t.Errorf("redirected to %q", loc)
+			}
+			if rec.Header().Get("Cache-Control") != "no-store" || rec.Header().Get("X-Request-ID") == "" {
+				t.Errorf("missing headers: %v", rec.Header())
+			}
+		})
+	}
+}
