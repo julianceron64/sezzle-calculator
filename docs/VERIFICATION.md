@@ -1,7 +1,8 @@
-# Verification: Docker image and smoke test
+# Verification: Docker image, smoke test and clean-clone check
 
-Output captured from a real run, so the claims in the README (image size, non-root, healthy, smoke test) can be
-checked without rebuilding. It is a snapshot: rerun the commands below to refresh it.
+Output captured from real runs, so the claims in the README (image size, non-root, healthy, smoke test, `make check`
+on a clean clone) can be checked without rebuilding. It is a snapshot: rerun the commands to refresh it. The first
+sections cover the Docker image; the last one covers the clean-clone check (Q-05).
 
 - **Date:** 2026-10-13 21:26 (UTC-5), i.e. 2026-10-14 02:26 UTC
 - **Image:** built with `make docker-build` (spec 005 `Dockerfile`)
@@ -72,3 +73,35 @@ ok   UNKNOWN_OPERATION
 ok   INVALID_JSON
 smoke: 11 checks passed against http://localhost:18080
 ```
+
+## Clean-clone check (Q-05)
+
+Spec 004 requires `make check` to be green on a clean clone after `npm ci`. This shows it, on a clone of the
+repository at commit `009a7cc` ("docs: state exactly what make check runs versus what CI runs"), with no
+`node_modules` and no uncommitted files.
+
+- **Date:** 2026-10-13, started 21:58 and finished 21:58 (UTC-5)
+- **Environment:** the same machine as above (Windows, Git Bash, Go and Node as in the README prerequisites)
+
+```bash
+git clone <path to the working repository> cleanclone
+cd cleanclone/frontend && npm ci
+cd .. && make check
+```
+
+**Result:** `npm ci` exit code 0, then `make check` exit code **0**. Key lines of the output:
+
+```text
+No fixed sleeps in tests (backend).
+No fixed sleeps in tests (frontend).
+Backend coverage: 97.1% (gate: 90%)
+ Test Files  7 passed (7)
+      Tests  154 passed (154)
+Statements   : 95.39% ( 228/239 )
+Branches     : 95.71% ( 201/210 )
+Functions    : 95.91% ( 47/49 )
+Lines        : 94.76% ( 199/210 )
+```
+
+`coverage/backend.out`, `coverage/backend.html` and `frontend/coverage/lcov.info` were generated in the clone. As the
+README explains, `make check` does not run the `cmd/server` tests or the production build; CI runs those separately.
